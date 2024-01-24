@@ -1,10 +1,11 @@
-import {Chart, LinearScale, TimeScale, LineElement, LineController, PointElement, Legend} from 'chart.js'
+// import {Chart, LinearScale, TimeScale, LineElement, LineController, PointElement, Tooltip, Legend} from 'chart.js'
+import Chart from 'chart.js/auto'
 import 'chartjs-adapter-luxon'
 import data from './data.json'
 import {DateTime} from 'luxon'
 import annotationPlugin from 'chartjs-plugin-annotation';
 
-Chart.register(LinearScale, LineElement, LineController, TimeScale, PointElement, Legend, annotationPlugin);
+// Chart.register(LinearScale, LineElement, LineController, TimeScale, PointElement, Tooltip, Legend, annotationPlugin);
 
 (async function () {
     const now = (new Date()).toISOString()
@@ -17,16 +18,23 @@ Chart.register(LinearScale, LineElement, LineController, TimeScale, PointElement
                     type: 'linear', display: true, position: 'left', title: {
                         display: true, text: "c/kWh"
                     },
-                }, y1: {
+                },
+                y1: {
                     type: 'linear', display: true, position: 'right', title: {
                         display: true, text: "MW"
                     }, // grid line settings
                     grid: {
                         drawOnChartArea: false, // only want the grid lines for one axis to show up
                     },
-                }, x: {
-                    type: 'time', ticks: {
+                },
+                x: {
+                    type: 'timeseries',
+                    time: {
                         stepSize: 60,
+                    },
+                    ticks: {
+                        // stepSize: 60,
+                        autoskip: false,
                         callback: function (value, index, ticks) {
                             const dt = new Date(value)
                             const hour = dt.getHours()
@@ -42,15 +50,17 @@ Chart.register(LinearScale, LineElement, LineController, TimeScale, PointElement
                             }
                         }
                     }
-
                 }
-            }, interaction: {
+            },
+            interaction: {
                 mode: "index", intersect: false,
-            }, plugins: {
+            },
+            plugins: {
                 title: {
                     display: true,
                     text: `Day-ahead prices and wind-power production, ${data["startTime"]} - ${data["endTime"]}, fetched ${data["fetchTime"]}`
-                }, annotation: {
+                },
+                annotation: {
                     annotations: {
                         line1: {
                             type: 'line',
@@ -122,10 +132,7 @@ Chart.register(LinearScale, LineElement, LineController, TimeScale, PointElement
                 },
                 yAxisID: 'y1',
 
-            }
-
-
-            ]
+            }]
         }
     });
 })();
