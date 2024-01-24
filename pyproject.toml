@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dynamic = ["version"]
+name = "semerg"
+dependencies = ["click>=8.1.7", "requests>=2.31.0"]
+
+[project.scripts]
+semerg = "semerg.main:cli"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+version = {attr = "semerg.__version__"}

@@ -1,0 +1,8 @@
+.gitignore
+.idea/
+dist/
+front/.parcel-cache/
+front/node_modules/
+front/src/data.json
+src/semerg.egg-info/
+build/
