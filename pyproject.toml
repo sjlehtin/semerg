@@ -7,6 +7,12 @@ dynamic = ["version"]
 name = "semerg"
 dependencies = ["click>=8.1.7", "requests>=2.31.0"]
 requires-python = ">= 3.11"
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
 
 [project.scripts]
 semerg = "semerg.main:cli"
@@ -16,3 +22,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.dynamic]
 version = {attr = "semerg.__version__"}
+
+[project.urls]
+Homepage = "https://github.com/sjlehtin/semerg"
