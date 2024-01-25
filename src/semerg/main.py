@@ -40,7 +40,7 @@ def to_interval(cap):
 @click.option("--date", metavar="DATE",
               help="Start fetch from DATE, default to today")
 @click.option("--output", type=click.File('w'))
-def day_ahead_prices(include_overhead, date, output):
+def gather_data(include_overhead, date, output):
     """
     Write energy prices and production timeseries to the specified
     output file.
