@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 dynamic = ["version"]
 name = "semerg"
 dependencies = ["click>=8.1.7", "requests>=2.31.0"]
+requires-python = ">= 3.11"
 
 [project.scripts]
 semerg = "semerg.main:cli"
