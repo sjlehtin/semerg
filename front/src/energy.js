@@ -80,7 +80,6 @@ Chart.register(LinearScale, LineElement, LineController,  TimeSeriesScale, TimeS
                                     chart = context.chart
                                     // Returning the value here has no effect. It only has an effect when the `context.type` is "annotation", which happens after this callback is first called with `context.type` "chart".
                                 } else {
-                                    console.log(chart.scales.y.max)
                                     return chart.scales.y.max
                                 }
                             },
