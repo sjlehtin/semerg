@@ -130,7 +130,6 @@ Chart.register(LinearScale, LineElement, LineController,  TimeSeriesScale, TimeS
                     xAxisKey: 'startTime', yAxisKey: 'energy'
                 },
                 yAxisID: 'y1',
-
             }]
         }
     });
