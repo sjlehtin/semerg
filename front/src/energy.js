@@ -1,10 +1,10 @@
-import {Chart, LinearScale, TimeSeriesScale, TimeScale, LineElement, LineController, PointElement, Tooltip, Legend} from 'chart.js'
+import {Chart, LinearScale, TimeSeriesScale, TimeScale, LineElement, LineController, PointElement, Tooltip, Legend, Title} from 'chart.js'
 import 'chartjs-adapter-luxon'
 import data from './data.json'
 import {DateTime} from 'luxon'
 import annotationPlugin from 'chartjs-plugin-annotation';
 
-Chart.register(LinearScale, LineElement, LineController,  TimeSeriesScale, TimeScale, PointElement, Tooltip, Legend, annotationPlugin);
+Chart.register(LinearScale, LineElement, LineController,  TimeSeriesScale, TimeScale, PointElement, Tooltip, Legend, Title, annotationPlugin);
 
 (async function () {
     const now = (new Date()).toISOString()
