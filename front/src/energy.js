@@ -6,6 +6,11 @@ import annotationPlugin from 'chartjs-plugin-annotation';
 
 Chart.register(LinearScale, LineElement, LineController,  TimeSeriesScale, TimeScale, PointElement, Tooltip, Legend, Title, annotationPlugin);
 
+function timeToLocale(ts) {
+    const dt = DateTime.fromISO(ts)
+    return dt.toLocaleString(DateTime.DATETIME_SHORT)
+}
+
 (async function () {
     const now = (new Date()).toISOString()
     let chart;
@@ -57,7 +62,7 @@ Chart.register(LinearScale, LineElement, LineController,  TimeSeriesScale, TimeS
             plugins: {
                 title: {
                     display: true,
-                    text: `Day-ahead prices and wind-power production, ${data["startTime"]} - ${data["endTime"]}, fetched ${data["fetchTime"]}`
+                    text: `Day-ahead prices and wind-power production, ${timeToLocale(data["startTime"])} - ${timeToLocale(data["endTime"])}, fetched ${timeToLocale(data["fetchTime"])}`
                 },
                 annotation: {
                     annotations: {
@@ -86,7 +91,7 @@ Chart.register(LinearScale, LineElement, LineController,  TimeSeriesScale, TimeS
                             position: 'start',
                             textAlign: 'left',
                             backgroundColor: 'rgba(245,245,245, 0.7)',
-                            content: [now],
+                            content: [timeToLocale(now)],
                             font: {
                                 size: 18
                             }
