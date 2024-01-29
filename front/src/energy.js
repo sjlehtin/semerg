@@ -11,6 +11,37 @@ function timeToLocale(ts) {
     return dt.toLocaleString(DateTime.DATETIME_SHORT)
 }
 
+function adjust(prices) {
+    let ret = []
+
+    for (const pt of prices) {
+        const dt = new Date(pt.startTime)
+        let price = pt.price
+        if (price > 0) {
+            // Negative price does not mean more is paid towards the customer
+            // because of VAT.
+             price *= 1.24
+        }
+        // VAT inclusive
+        // 0.5 Vattenfall margin
+        // 2.776 electricity tax
+        // 0.01612 security of supply fee
+        price += 0.5 + 2.7776 + 0.01612
+        const hour = dt.getHours()
+        // Transmission fee, VAT inclusive
+        if (hour >= 7 && hour < 22) {
+            price += 3.20
+        } else {
+            price += 1.40
+        }
+        ret.push({
+            startTime: dt,
+            price: price
+        })
+    }
+    return ret
+}
+
 (async function () {
     const now = (new Date()).toISOString()
     let chart;
@@ -108,16 +139,17 @@ function timeToLocale(ts) {
                     xAxisKey: 'startTime', yAxisKey: 'price'
                 },
                 yAxisId: 'y',
-            }, {
+            },{
                 label: 'Actual price',
-                data: data['adjustedPrices'],
-                borderColor: "#d0631e",
+                data: adjust(data['basePrices']),
+                borderColor: "#05173f",
                 parsing: {
                     xAxisKey: 'startTime', yAxisKey: 'price'
                 },
                 yAxisID: 'y',
 
-            }, {
+            },
+                {
                 label: 'Wind production',
                 data: data['windProduction'],
                 borderColor: "#33e50b",

@@ -88,34 +88,15 @@ def gather_data(include_overhead, date, output):
             series.append({"start": interval_start + datetime.timedelta(
                 hours=position - 1), "price": price})
 
-    # TODO: move overhead calculation to the Javascript
-    # Addendums 0.50 c/kWh Vattenfall margin (incl. VAT 24%)
-    # VAT 0%
-    # 0.40323 c/kWh Vattenfall margin
-    # tax 2.24 c/kWh
-    # security of supply fee 0.01300 c/kWh
-    base_overhead = 0.013 + 2.24 + 0.40323
     prices = []
     times = []
     for item in series:
         times.append(item["start"])
-        hour = item["start"].astimezone().hour
+
+        # Price in response is EUR/MWh -> we want c/kWh
         price = item["price"] / 10
 
-        # transmission fee day 2.58 c/kWh
-        # transmission fee night 1.13 c/kWh
-        if 7 <= hour <= 22:
-            transmission_fee = 2.58
-        else:
-            transmission_fee = 1.13
-        overhead = base_overhead + transmission_fee
-
-        total_price = price
-        if total_price > 0:
-            total_price *= 1.24
-        if include_overhead:
-            total_price += overhead * 1.24
-        prices.append([price, total_price])
+        prices.append(price)
 
     # Fetch production data
 
@@ -152,10 +133,7 @@ def gather_data(include_overhead, date, output):
             'endTime': end,
             'basePrices':
                 [{'startTime': ts.isoformat(), 'price': pr}
-                 for ts, pr in zip(times, [pr[0] for pr in prices])],
-            'adjustedPrices':
-                [{'startTime': ts.isoformat(), 'price': pr}
-                 for ts, pr in zip(times, [pr[1] for pr in prices])],
+                 for ts, pr in zip(times, prices)],
             'windProduction':
                 [{'startTime': ts.isoformat(), 'energy': pr}
                  for ts, pr in zip(production_times, production)],
