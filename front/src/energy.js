@@ -161,7 +161,16 @@ function adjust(prices) {
             }, {
                 label: 'Wind production forecast',
                 data: data['windProductionForecast'],
-                borderColor: "#dad715",
+                borderColor: "#15dac3",
+                parsing: {
+                    xAxisKey: 'startTime', yAxisKey: 'energy'
+                },
+                yAxisID: 'y1',
+            },
+            {
+                label: 'Solar production forecast',
+                data: data['solarProductionForecast'],
+                borderColor: "#dab315",
                 parsing: {
                     xAxisKey: 'startTime', yAxisKey: 'energy'
                 },
