@@ -1,9 +1,9 @@
 {
   "name": "semerg",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "license": "MIT",
   "scripts": {
-    "dev": "parcel src/index.html",
+    "dev": "parcel serve src/index.html",
     "build": "parcel build src/index.html"
   },
   "devDependencies": {
