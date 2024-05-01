@@ -55,8 +55,8 @@ def gather_data(include_overhead, date, output):
     cap = datetime.datetime(year=dt.year, month=dt.month, day=dt.day,
                             tzinfo=dt.tzinfo).astimezone(
         datetime.timezone.utc)
-    start = to_interval(cap)
-    end = to_interval(cap + datetime.timedelta(days=2))
+    start_time = to_interval(cap)
+    end_time = to_interval(cap + datetime.timedelta(days=2))
 
     # DocumentType A44: price document
     # In_Domain Used, same as Out domain
@@ -65,7 +65,7 @@ def gather_data(include_overhead, date, output):
 
     params = {"documentType": "A44",
               "securityToken": config.entsoe_security_token,
-              "timeInterval": f"{start}/{end}",
+              "timeInterval": f"{start_time}/{end_time}",
               "in_domain": "10YFI-1--------U",
               "out_domain": "10YFI-1--------U"
               }
@@ -98,48 +98,63 @@ def gather_data(include_overhead, date, output):
 
         prices.append(price)
 
+    range_start = times[0]
+    range_end = times[-1]
     # Fetch production data
 
-    # 'variable/75' is Wind power production
-    headers = {"x-api-key": config.fingrid_authentication_token}
-    params = {"start_time": to_interval(times[0]),
-              "end_time": to_interval(times[-1])}
-    response = requests.get(
-        "https://api.fingrid.fi/v1/variable/75/events/json",
-        headers=headers,
-        params=params)
+    wind_production, wind_production_times = get_production_data(
+        config, 75, range_start, range_end)
 
-    production_raw_data = json.loads(response.content)
-    production_times = [datetime.datetime.fromisoformat(val["start_time"])
-                        for val in production_raw_data]
-    production = [val["value"] for val in production_raw_data]
+    wind_production_forecast, wind_production_forecast_times = get_production_data(
+        config, 245, range_start, range_end)
 
-    # 'variable/245' is Wind power production forecast
-    response = requests.get(
-        "https://api.fingrid.fi/v1/variable/245/events/json",
-        headers=headers,
-        params=params)
-    production_raw_data = json.loads(response.content)
-    forecast_production_times = [
-        datetime.datetime.fromisoformat(val["start_time"]) for val in
-        production_raw_data]
-    forecast_production = [val["value"] for val in production_raw_data]
+    solar_production_forecast, solar_production_forecast_times = get_production_data(
+        config, 247, range_start, range_end)
 
     if output:
         json.dump({
             'fetchTime': datetime.datetime.now(
                 tz=datetime.timezone.utc).isoformat(),
-            'startTime': start,
-            'endTime': end,
+            'startTime': start_time,
+            'endTime': end_time,
             'basePrices':
                 [{'startTime': ts.isoformat(), 'price': pr}
                  for ts, pr in zip(times, prices)],
             'windProduction':
                 [{'startTime': ts.isoformat(), 'energy': pr}
-                 for ts, pr in zip(production_times, production)],
+                 for ts, pr in zip(wind_production_times, wind_production)],
             'windProductionForecast':
                 [{'startTime': ts.isoformat(), 'energy': pr}
-                 for ts, pr in zip(forecast_production_times,
-                                   forecast_production)],
+                 for ts, pr in zip(wind_production_forecast_times,
+                                   wind_production_forecast)],
+            'solarProductionForecast':
+                [{'startTime': ts.isoformat(), 'energy': pr}
+                 for ts, pr in zip(solar_production_forecast_times,
+                                   solar_production_forecast)],
         },
             output)
+
+
+def get_production_data(config, dataset_id, start_time, end_time):
+    headers = {"x-api-key": config.fingrid_authentication_token}
+    params = {
+        "startTime": to_interval(start_time),
+        "endTime": to_interval(end_time),
+        "format": "json",
+        "pageSize": 1000,
+        "locale": "en",
+        "sortBy": "startTime",
+        "sortOrder": "asc",
+    }
+    response = requests.get(
+        f"https://data.fingrid.fi/api/datasets/{dataset_id}/data",
+        headers=headers,
+        params=params)
+    production_raw_data = json.loads(response.content)
+    if response.status_code != 200:
+        raise click.ClickException(
+            f"Failed to get data from endpoint, status {response.status_code}: {response.text} ")
+    production_times = [datetime.datetime.fromisoformat(val["startTime"])
+                        for val in production_raw_data["data"]]
+    production = [val["value"] for val in production_raw_data["data"]]
+    return production, production_times
