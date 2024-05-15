@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 import requests
+import time
 
 __version__ = "0.2"
 
@@ -39,8 +40,10 @@ def to_interval(cap):
 @click.option("--include-overhead", default=True, help="Calculate overhead")
 @click.option("--date", metavar="DATE",
               help="Start fetch from DATE, default to today")
+@click.option("--wait-between-requests", "delay", type=float, metavar="DELAY",
+              help="Pause for DELAY seconds between requests to allow API endpoint to cooldown")
 @click.option("--output", type=click.File('w'))
-def gather_data(include_overhead, date, output):
+def gather_data(include_overhead, date, delay, output):
     """
     Write energy prices and production timeseries to the specified
     output file.
@@ -105,8 +108,14 @@ def gather_data(include_overhead, date, output):
     wind_production, wind_production_times = get_production_data(
         config, 75, range_start, range_end)
 
+    if delay:
+        time.sleep(delay)
+
     wind_production_forecast, wind_production_forecast_times = get_production_data(
         config, 245, range_start, range_end)
+
+    if delay:
+        time.sleep(delay)
 
     solar_production_forecast, solar_production_forecast_times = get_production_data(
         config, 247, range_start, range_end)
@@ -153,7 +162,7 @@ def get_production_data(config, dataset_id, start_time, end_time):
     production_raw_data = json.loads(response.content)
     if response.status_code != 200:
         raise click.ClickException(
-            f"Failed to get data from endpoint, status {response.status_code}: {response.text} ")
+            f"Failed to get data from endpoint for dataset {dataset_id}, status {response.status_code}: {response.text} ")
     production_times = [datetime.datetime.fromisoformat(val["startTime"])
                         for val in production_raw_data["data"]]
     production = [val["value"] for val in production_raw_data["data"]]
