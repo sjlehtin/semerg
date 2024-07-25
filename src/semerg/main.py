@@ -159,10 +159,10 @@ def get_production_data(config, dataset_id, start_time, end_time):
         f"https://data.fingrid.fi/api/datasets/{dataset_id}/data",
         headers=headers,
         params=params)
-    production_raw_data = json.loads(response.content)
     if response.status_code != 200:
         raise click.ClickException(
             f"Failed to get data from endpoint for dataset {dataset_id}, status {response.status_code}: {response.text} ")
+    production_raw_data = json.loads(response.content)
     production_times = [datetime.datetime.fromisoformat(val["startTime"])
                         for val in production_raw_data["data"]]
     production = [val["value"] for val in production_raw_data["data"]]
