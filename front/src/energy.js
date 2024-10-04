@@ -20,7 +20,7 @@ function adjust(prices) {
         if (price > 0) {
             // Negative price does not mean more is paid towards the customer
             // because of VAT.
-             price *= 1.24
+             price *= 1.255
         }
         // VAT inclusive
         // 0.5 Vattenfall margin
