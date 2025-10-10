@@ -72,8 +72,9 @@ def gather_data(include_overhead, date, delay, output):
 
     entsoe_security_token = config.entsoe_security_token
 
-    series = pull_entsoe_data(entsoe_security_token, start_time,
+    entsoe_data = pull_entsoe_data(entsoe_security_token, start_time,
                               end_time)
+    series = entsoe_data['series']
 
     fetched_data = {
         'fetchTime': datetime.datetime.now(
@@ -128,6 +129,14 @@ def gather_data(include_overhead, date, delay, output):
         json.dump(fetched_data, output)
 
 
+resolutions = {
+    "PT15M": datetime.timedelta(minutes=15),
+    "PT30M": datetime.timedelta(minutes=30),
+    "PT60M": datetime.timedelta(minutes=60),
+    "P1D": datetime.timedelta(days=1)
+}
+
+
 def pull_entsoe_data(entsoe_security_token, start_time, end_time):
     params = {"documentType": "A44",
               "securityToken": entsoe_security_token,
@@ -135,31 +144,64 @@ def pull_entsoe_data(entsoe_security_token, start_time, end_time):
               "in_domain": "10YFI-1--------U",
               "out_domain": "10YFI-1--------U"
               }
+    click.echo(
+        f"Fetching pricing data from Entso-E between {start_time} and "
+        f"{end_time}")
     response = requests.get("https://web-api.tp.entsoe.eu/api", params=params)
-    xml_data = response.content.decode("utf-8", "replace")
-    root = ET.fromstring(xml_data)
-    series = []
-    for child in root.findall("./{*}TimeSeries/{*}Period"):
-        interval_start = datetime.datetime.fromisoformat(
-            child.find("{*}timeInterval/{*}start").text.replace("Z",
-                                                                "+00:00"))
 
-        # TODO: verify resolution
-        for pt in child.findall("{*}Point"):
-            position = int(pt.find("{*}position").text)
-            price = float(pt.find("{*}price.amount").text)
-            series.append({"start": interval_start + datetime.timedelta(
-                hours=position - 1), "price": price})
+    series_start_time = None
+    series_end_time = None
 
-    processed = []
-    for item in series:
-        processed.append({
-            'startTime': item["start"].isoformat(),
-            # Price in response is EUR/MWh -> we want c/kWh
-            'price': item["price"] / 10
-        })
-    processed.sort(key=lambda x: x["startTime"])
-    return processed
+    if response.status_code == 200:
+        # with open("api_result.txt", "wb") as api_result:
+        #     api_result.write(response.content)
+        xml_data = response.content.decode("utf-8", "replace")
+        root = ET.fromstring(xml_data)
+        series = []
+
+        for child in root.findall("./{*}TimeSeries/{*}Period"):
+            interval_start = datetime.datetime.fromisoformat(
+                child.find("{*}timeInterval/{*}start").text.replace("Z",
+                                                                    "+00:00"))
+            interval_end = datetime.datetime.fromisoformat(
+                child.find("{*}timeInterval/{*}end").text.replace("Z",
+                                                                    "+00:00"))
+            if not series_start_time or interval_start < series_start_time:
+                series_start_time = interval_start
+            if not series_end_time or interval_end > series_end_time:
+                series_end_time = interval_end
+
+            # Possible resolutions PT15M, PT30M, PT60M and P1D
+            received_resolution = child.find("{*}resolution").text
+            # TODO: rewrite error handling to use exceptions
+            assert received_resolution in resolutions
+
+            resolution = resolutions[received_resolution]
+
+            for pt in child.findall("{*}Point"):
+                position = int(pt.find("{*}position").text)
+                price = float(pt.find("{*}price.amount").text)
+                offset = resolution * (position - 1)
+                series.append({"start": interval_start + offset, "price": price})
+
+        processed = []
+        for item in series:
+            processed.append({
+                'startTime': item["start"].isoformat(),
+                # Price in response is EUR/MWh -> we want c/kWh
+                'price': item["price"] / 10
+            })
+        processed.sort(key=lambda x: x["startTime"])
+
+        if not processed:
+            click.echo(f"No data points from Entso-E!")
+        else:
+            click.echo(
+                f"Got {len(processed)} data points from Entso-E, from {processed[0]['startTime']} to {processed[-1]['startTime']}.")
+        return {'series': processed, 'start': series_start_time.isoformat(), 'end': series_end_time.isoformat()}
+    else:
+        click.echo(f"Failed to fetch Entso-E data, code: {response.status_code}")
+        return {}
 
 
 def get_production_data(config, dataset_id, start_time, end_time):

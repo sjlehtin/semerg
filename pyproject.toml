@@ -25,3 +25,10 @@ version = {attr = "semerg.__version__"}
 
 [project.urls]
 Homepage = "https://github.com/sjlehtin/semerg"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "tox",
+    "tox-uv"
+]
