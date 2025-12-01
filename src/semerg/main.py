@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import tomllib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -44,7 +45,7 @@ class APIError(Exception):
 @click.option("--include-overhead", default=True, help="Calculate overhead")
 @click.option("--date", metavar="DATE",
               help="Start fetch from DATE, default to today")
-@click.option("--wait-between-requests", "delay", type=float, metavar="DELAY",
+@click.option("--wait-between-requests", "--throttle", "delay", type=float, metavar="DELAY",
               help="Pause for DELAY seconds between requests to allow API endpoint to cooldown")
 @click.option("--output", type=click.File('w'))
 def gather_data(include_overhead, date, delay, output):
@@ -59,11 +60,13 @@ def gather_data(include_overhead, date, delay, output):
     else:
         dt = datetime.datetime.strptime(date, "%Y-%m-%d").astimezone()
 
-    cap = datetime.datetime(year=dt.year, month=dt.month, day=dt.day,
+    start_time = datetime.datetime(year=dt.year, month=dt.month, day=dt.day,
                             tzinfo=dt.tzinfo).astimezone(
         datetime.timezone.utc)
-    start_time = to_iso8601(cap)
-    end_time = to_iso8601(cap + datetime.timedelta(days=2))
+    start_time_stamp = to_iso8601(start_time)
+
+    end_time = start_time + datetime.timedelta(days=2)
+    end_time_stamp = to_iso8601(end_time)
 
     # DocumentType A44: price document
     # In_Domain Used, same as Out domain
@@ -72,28 +75,27 @@ def gather_data(include_overhead, date, delay, output):
 
     entsoe_security_token = config.entsoe_security_token
 
-    entsoe_data = pull_entsoe_data(entsoe_security_token, start_time,
-                              end_time)
+    entsoe_data = pull_entsoe_data(entsoe_security_token, start_time, end_time)
     series = entsoe_data['series']
 
     fetched_data = {
         'fetchTime': datetime.datetime.now(
             tz=datetime.timezone.utc).isoformat(),
-        'startTime': start_time,
-        'endTime': end_time,
+        'startTime': start_time_stamp,
+        'endTime': end_time_stamp,
         'basePrices': series
     }
 
     # Entsoe-E might return more than we asked, let's enrich the data with
     # production data up until that point.
-    start_time = series[0]['startTime']
+    start_time_stamp = series[0]['startTime']
     click.echo(
-        f"Fetching production data from Fingrid between {start_time} and "
-        f"{end_time}")
+        f"Fetching production data from Fingrid between {start_time_stamp} and "
+        f"{end_time_stamp}")
 
     try:
         wind_production, wind_production_times = get_production_data(
-            config, 75, start_time, end_time)
+            config, 75, start_time_stamp, end_time_stamp)
 
         fetched_data['windProduction'] = [
             {'startTime': ts.isoformat(), 'energy': pr}
@@ -104,7 +106,7 @@ def gather_data(include_overhead, date, delay, output):
 
         wind_production_forecast, wind_production_forecast_times = (
             get_production_data(
-                config, 245, start_time, end_time))
+                config, 245, start_time_stamp, end_time_stamp))
 
         fetched_data['windProductionForecast'] = [
             {'startTime': ts.isoformat(), 'energy': pr}
@@ -116,7 +118,7 @@ def gather_data(include_overhead, date, delay, output):
 
         solar_production_forecast, solar_production_forecast_times = (
             get_production_data(
-                config, 247, start_time, end_time))
+                config, 247, start_time_stamp, end_time_stamp))
 
         fetched_data['solarProductionForecast'] = [
             {'startTime': ts.isoformat(), 'energy': pr}
@@ -137,10 +139,12 @@ resolutions = {
 }
 
 
-def pull_entsoe_data(entsoe_security_token, start_time, end_time):
+def pull_entsoe_data(entsoe_security_token: str, start_time: datetime, end_time: datetime):
+    start_time_stamp = start_time.strftime("%Y-%m-%dT%H:%MZ")
+    end_time_stamp = end_time.strftime("%Y-%m-%dT%H:%MZ")
     params = {"documentType": "A44",
               "securityToken": entsoe_security_token,
-              "timeInterval": f"{start_time}/{end_time}",
+              "timeInterval": f"{start_time_stamp}/{end_time_stamp}",
               "in_domain": "10YFI-1--------U",
               "out_domain": "10YFI-1--------U"
               }
@@ -201,6 +205,7 @@ def pull_entsoe_data(entsoe_security_token, start_time, end_time):
         return {'series': processed, 'start': series_start_time.isoformat(), 'end': series_end_time.isoformat()}
     else:
         click.echo(f"Failed to fetch Entso-E data, code: {response.status_code}")
+        logging.error(f"Failed to fetch Entso-E data, code: {response.status_code}, data: {response.text}")
         return {}
 
 

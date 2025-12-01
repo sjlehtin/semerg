@@ -26,8 +26,8 @@ def test_pull_entsoe_data(monkeypatch):
         # Call the function with test parameters
         result = pull_entsoe_data(
             entsoe_security_token="test_token",
-            start_time="2024-01-01T00:00:00Z",
-            end_time="2024-01-02T00:00:00Z"
+            start_time=datetime.fromisoformat("2024-01-01T00:00:00Z"),
+            end_time=datetime.fromisoformat("2024-01-02T00:00:00Z")
         )
 
     # Assert the results
