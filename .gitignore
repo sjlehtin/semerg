@@ -1,8 +1,9 @@
-.gitignore
 .idea/
-dist/
-front/.parcel-cache/
-front/node_modules/
-front/src/data.json
-src/semerg.egg-info/
 build/
+dist/
+src/semerg.egg-info/
+
+front/node_modules/
+# Seeded from data.sample.json for local development, overwritten by real
+# fetches. The sample is committed; this is not.
+front/public/data.json

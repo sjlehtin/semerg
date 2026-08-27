@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/*
+ * Chart colours live here rather than in chart.js so that the page and the
+ * canvas cannot drift apart. chart.js reads them back with getComputedStyle.
+ *
+ * Note these are plain custom properties, not a Tailwind `@theme` block:
+ * `@theme` must be top level in Tailwind v4 and cannot be nested in a media
+ * query, so the dark overrides below would not work inside one.
+ */
+:root {
+  --surface: #ffffff;
+  --surface-sunken: #f4f6f8;
+  --border: #dfe4ea;
+  --text: #10202e;
+  --text-muted: #5c6b7a;
+
+  --chart-grid: #e4e9ee;
+  --chart-axis: #5c6b7a;
+
+  --series-base-price: #127194;
+  --series-actual-price: #05173f;
+  --series-wind: #2fa30c;
+  --series-wind-forecast: #12b3a0;
+  --series-solar: #d19a0f;
+
+  --now-line: #e0466b;
+  --window-fill: rgb(47 163 12 / 0.16);
+  --window-border: #2fa30c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #131a22;
+    --surface-sunken: #0c1116;
+    --border: #26313d;
+    --text: #e7edf3;
+    --text-muted: #93a3b3;
+
+    --chart-grid: #24303c;
+    --chart-axis: #93a3b3;
+
+    --series-base-price: #4bb4d8;
+    --series-actual-price: #b9c9ea;
+    --series-wind: #5ede2f;
+    --series-wind-forecast: #2ee0cb;
+    --series-solar: #f0c245;
+
+    --now-line: #ff6d8c;
+    --window-fill: rgb(94 222 47 / 0.18);
+    --window-border: #5ede2f;
+  }
+}
+
+body {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    @apply rounded-xl;
+  }
+}

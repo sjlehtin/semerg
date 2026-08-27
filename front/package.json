@@ -1,13 +1,21 @@
 {
   "name": "semerg",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "license": "MIT",
+  "type": "module",
   "scripts": {
-    "dev": "parcel serve src/index.html",
-    "build": "parcel build src/index.html"
+    "predev": "node scripts/ensure-data.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "parcel": "^2.6.2"
+    "@tailwindcss/vite": "^4.0.0",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.0"
   },
   "dependencies": {
     "chart.js": "^4.0.0",
