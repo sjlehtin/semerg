@@ -37,19 +37,13 @@ export function exVat(value, quotedVatRate) {
 
 /** Set by the state; the same for everyone. Rates ex-VAT, c/kWh. */
 export const national = {
-  // NOTE: the four rates below are the values currently in production,
-  // back-derived from the inclusive figures the old code carried, so that this
-  // restructure provably changes no output. Several of them are wrong -- see
-  // the comments -- and are corrected in the very next commit, on its own, so
-  // that the change in what this tool reports is visible in review rather than
-  // buried in a refactor.
-
-  // sähkövero veroluokka I. 2.7776 = 2.24 x 1.24: this still carries the OLD
-  // 24% VAT rate, never re-derived when VAT rose to 25.5% in September 2024.
-  electricityTax: exVat(2.7776, 0.255),
-  // Huoltovarmuusmaksu. 0.01612 = 0.013 x 1.24, so likewise stuck at 24% VAT --
-  // and the underlying rate itself rose to 0.085 on 2026-04-01.
-  securityOfSupply: exVat(0.01612, 0.255),
+  // Sähkövero, veroluokka I (households). Energy component only.
+  // Source: Vantaan Energia Sähköverkot verkkopalveluhinnasto, which lists
+  // 2.24 ex-VAT / 2.81120 incl.
+  electricityTax: 2.24,
+  // Huoltovarmuusmaksu. Raised from 0.013 to 0.085 on 2026-04-01.
+  // Source: Energiavirasto.
+  securityOfSupply: 0.085,
   /**
    * Whether VAT applies to a negative spot price.
    *
@@ -82,10 +76,9 @@ export const transmission = {
   // aikoina on voimassa yöhinta." -- all days of the week, so no weekend case.
   dayStartHour: 7,
   dayEndHour: 22,
-  // Production values, back-derived as above. The current price list gives
-  // 2.63 and 1.13 ex-VAT (3.30 / 1.42 inclusive).
-  dayRate: exVat(3.2, 0.255),
-  nightRate: exVat(1.4, 0.255),
+  // Verkkopalveluhinnasto, ALV 0 % column (3.30 / 1.42 inclusive).
+  dayRate: 2.63,
+  nightRate: 1.13,
 
   rateAt(dateTime) {
     const hour = dateTime.setZone(ZONE).hour;
