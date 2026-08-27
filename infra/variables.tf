@@ -55,6 +55,35 @@ variable "create_oidc_provider" {
   default     = true
 }
 
+variable "aliases" {
+  description = <<-EOT
+    Hostnames this distribution answers to, on top of its *.cloudfront.net name.
+
+    A hostname can be attached to only one CloudFront distribution at a time, so
+    adding one that another distribution still holds fails with
+    CNAMEAlreadyExists. Moving an existing hostname across is a separate step --
+    see "Moving the public hostname" in README.md.
+
+    Leave empty to serve only on the default *.cloudfront.net name, which needs
+    no certificate and no DNS.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
+variable "certificate_domain" {
+  description = <<-EOT
+    Domain of an ISSUED ACM certificate in us-east-1 covering every entry in
+    `aliases`. A wildcard such as "*.example.com" covers any single-label
+    subdomain. Looked up by domain rather than named by ARN so that no account
+    id is committed.
+
+    Ignored when `aliases` is empty.
+  EOT
+  type        = string
+  default     = "*.semeai.fi"
+}
+
 variable "price_class" {
   description = "CloudFront price class. PriceClass_100 is North America and Europe, which covers a Finnish audience at the lowest cost."
   type        = string

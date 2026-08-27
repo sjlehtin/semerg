@@ -142,25 +142,65 @@ then `terraform apply`, test, and remove it again. Do not be tempted by
 `repo:owner/repo:*` — on a public repository that lets any pull request from
 anyone assume a role that can delete objects.
 
-## Adding a custom domain
+## Serving on a custom hostname
 
-Currently the site is served on the distribution's own `*.cloudfront.net`
-hostname, which needs no certificate and no DNS. To move a real domain onto it:
+Set `aliases` in `terraform.tfvars` and apply:
 
-1. Add an `aws_acm_certificate` **in `us-east-1`** — CloudFront only accepts
-   certificates from that region, regardless of where the bucket lives. This
-   needs a second provider alias.
-2. Validate it (DNS validation; records at whichever registrar or zone holds
-   the domain).
-3. Add `aliases = ["your.domain"]` to the distribution and swap
-   `cloudfront_default_certificate` for `acm_certificate_arn` plus
-   `minimum_protocol_version = "TLSv1.2_2021"` and
-   `ssl_support_method = "sni-only"`.
-4. Point the domain at the distribution.
+```hcl
+aliases = ["energy2.semeai.fi"]
+```
 
-That is also the cutover: moving the live hostname from the old distribution to
-this one. Reversible in minutes by putting the record back, which is why the
-old bucket is kept intact for a while afterwards.
+The certificate is looked up by domain (`certificate_domain`, default
+`*.semeai.fi`) rather than named by ARN, so no account id is committed. It must
+already exist in **us-east-1** and be ISSUED — CloudFront accepts certificates
+from that region only, wherever the bucket and distribution live. A wildcard
+covers any single-label subdomain, so a new one usually needs no new
+certificate.
+
+Then add a DNS record pointing the hostname at the `distribution_domain` output.
+DNS for `semeai.fi` is at OVH, not Route 53, so that step is manual and is not
+described here.
+
+Setting `aliases` also switches the distribution off the default
+`*.cloudfront.net` certificate, which is what pins it to CloudFront's `TLSv1`
+security policy. TLS 1.0 and 1.1 stop being accepted at the same time. Leaving
+`aliases` empty keeps the old behaviour exactly, certificate and all.
+
+## Moving the public hostname
+
+A hostname can be attached to **one** CloudFront distribution at a time, across
+all of CloudFront. Adding one that another distribution still holds fails with
+`CNAMEAlreadyExists`, so a live hostname cannot simply be listed in `aliases`
+here while the old distribution still has it.
+
+Bring the new service up on a second hostname first and soak it. When you are
+ready to move the real one, either:
+
+**Without downtime.** Add a TXT record named `_cf-2-<hostname>` whose value is
+the target distribution's domain, then:
+
+```bash
+aws cloudfront associate-alias \
+  --target-distribution-id "$(terraform output -raw distribution_id)" \
+  --alias energy.semeai.fi
+```
+
+CloudFront checks the TXT record and moves the alias with no gap. Only then add
+the hostname to `aliases` and apply — Terraform will see it already present and
+report no change. Finally repoint the DNS record and delete the TXT record.
+
+Running the apply *before* `associate-alias` fails, because the alias still
+belongs to the old distribution at that point.
+
+**Accepting a short gap.** Remove the alias from the old distribution, add it to
+`aliases` here, apply, then repoint DNS. For five to fifteen minutes the
+hostname resolves to a distribution that no longer claims it, and returns 403.
+
+To roll back, put the alias back on the old distribution. Keep the old bucket
+and distribution intact for a week or so afterwards — and when retiring the
+bucket, **empty it rather than deleting it**: S3 bucket names are global, and a
+deleted name can be claimed by someone else while any distribution still lists
+it as an origin.
 
 ## What is not here
 
