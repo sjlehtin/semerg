@@ -7,3 +7,14 @@ front/node_modules/
 # Seeded from data.sample.json for local development, overwritten by real
 # fetches. The sample is committed; this is not.
 front/public/data.json
+
+# Terraform. The lock file (infra/.terraform.lock.hcl) is deliberately NOT
+# ignored: committing it pins provider versions. `crash.log` can contain state
+# contents, so it must never be committed.
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/terraform.tfstate.d/
+infra/*.tfvars
+infra/crash.log
+infra/crash.*.log
