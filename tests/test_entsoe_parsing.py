@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from pathlib import Path
@@ -52,4 +52,31 @@ def test_pull_entsoe_data(monkeypatch):
     start = datetime.fromisoformat(result.get('start'))
     end = datetime.fromisoformat(result.get('end'))
     assert all([start <= datetime.fromisoformat(time) <= end for time in start_times])
+
+
+def test_real_response_expands_to_a_uniform_grid(monkeypatch):
+    """End-to-end check of the guarantee downstream code relies on.
+
+    The sample is a real three-period A03 document missing 28 interior points
+    across its 288 slots; after parsing there must be no gaps at all.
+    """
+    test_xml_file = TEST_DIR / "sample_entsoe_response.xml"
+    sample_xml_content = test_xml_file.read_bytes()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.content = sample_xml_content
+
+    with patch('semerg.main.requests.get', return_value=mock_response):
+        result = pull_entsoe_data(
+            entsoe_security_token="test_token",
+            start_time=datetime.fromisoformat("2025-10-09T00:00:00Z"),
+            end_time=datetime.fromisoformat("2025-10-11T00:00:00Z")
+        )
+
+    stamps = [datetime.fromisoformat(p['startTime']) for p in result['series']]
+    gaps = {later - earlier for earlier, later in zip(stamps, stamps[1:])}
+
+    assert gaps == {timedelta(minutes=15)}
+    assert len(stamps) == 288
 

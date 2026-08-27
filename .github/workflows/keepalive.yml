@@ -1,0 +1,31 @@
+name: Keepalive
+
+# GitHub disables scheduled workflows after 60 days without a commit to the
+# repository. Workflow runs do not reset that timer -- only commits do -- so a
+# dormant repo silently stops refreshing its data.
+#
+# This makes a small monthly commit to keep the clock reset. Delete it if the
+# repository sees regular commits anyway.
+
+on:
+  schedule:
+    - cron: "0 5 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - run: |
+          set -euo pipefail
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/last-keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/last-keepalive
+          git diff --staged --quiet || git commit -m "chore: keepalive"
+          git push

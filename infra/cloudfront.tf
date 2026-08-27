@@ -1,0 +1,99 @@
+resource "aws_cloudfront_origin_access_control" "site" {
+  name                              = "${var.bucket_name}-oac"
+  description                       = "Origin access control for the semerg site bucket"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# Respects the Cache-Control headers the deploy workflows set on each object,
+# which is where this site's caching policy actually lives: hashed assets are
+# immutable, index.html and data.json get a 60 second TTL. See
+# docs/deployment.md.
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
+}
+
+# Security headers the origin cannot set for itself: these apply to every
+# response, including ones served from cache.
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "${var.bucket_name}-security-headers"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      override                   = true
+      # No includeSubDomains while on *.cloudfront.net: that hostname is a
+      # shared domain and the header should not speak for anything but this
+      # distribution. Revisit when a custom domain is in place.
+      include_subdomains = false
+      preload            = false
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+}
+
+resource "aws_cloudfront_distribution" "site" {
+  enabled         = true
+  comment         = "semerg static site"
+  price_class     = var.price_class
+  http_version    = "http2and3"
+  is_ipv6_enabled = true
+
+  # Without this, a request for / returns an S3 AccessDenied XML document
+  # rather than the page -- which looks like a permissions problem and is not.
+  default_root_object = "index.html"
+
+  origin {
+    domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
+    origin_id                = "site-bucket"
+    origin_access_control_id = aws_cloudfront_origin_access_control.site.id
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "site-bucket"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    # The default *.cloudfront.net certificate.
+    #
+    # This pins the distribution to CloudFront's "TLSv1" security policy, which
+    # still permits TLS 1.0 and 1.1 and includes 3DES ciphers. CloudFront
+    # rejects minimum_protocol_version while this is set, so it cannot be
+    # tightened here -- the only fix is a custom domain with an ACM certificate
+    # in us-east-1, at which point set:
+    #
+    #   ssl_support_method       = "sni-only"
+    #   minimum_protocol_version = "TLSv1.2_2021"
+    #
+    # See infra/README.md. Worth knowing that scanners will flag this, and that
+    # they are right.
+    cloudfront_default_certificate = true
+  }
+}

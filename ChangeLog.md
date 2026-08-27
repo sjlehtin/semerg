@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Cheapest-time-to-run recommendations for common household loads: dishwasher,
+  washing machine, sauna and EV charging at 11 kW. Each shows when to start,
+  what it costs, and what waiting saves against starting now. Durations (and
+  the EV charge target) are adjustable and persist in the browser.
+- A visual redesign, with a responsive layout and light/dark themes. The chart
+  reads its palette from the stylesheet, so page and canvas cannot drift apart.
+- Frontend tests, run with Vitest.
+
+- Read API tokens from `SEMERG_ENTSOE_TOKEN` and `SEMERG_FINGRID_TOKEN`,
+  falling back to `~/.semerg/config` as before. Each token is looked up
+  independently.
+- `semerg validate-data`, which checks a gathered file is fit to publish. It
+  requires prices reaching the end of the current Finnish day and refuses a
+  series shorter than one already published.
+- `--retries` option, backing off on rate limits and server errors.
+- Deploy from GitHub Actions to S3, documented in `docs/deployment.md`.
+- Terraform for the AWS side — bucket, CloudFront distribution and the
+  deployment role — in `infra/`.
+- `AGENTS.md`.
+
+### Changed
+
+- `data.json` is fetched at runtime rather than bundled into the JavaScript.
+  Refreshing the data no longer requires rebuilding, and the page updates in
+  place every five minutes instead of reloading itself with a meta refresh.
+- The frontend is built with Vite and styled with Tailwind, replacing Parcel.
+- Tariff rates moved out of the chart code into `front/src/tariff.js`, which
+  models the supplier, the network operator and national taxes separately.
+- Prices are expanded onto a uniform 15-minute grid. Entso-E omits points whose
+  price repeats (curveType A03) and may mix resolutions between periods; the
+  gaps are now filled at parse time, where the period metadata needed to do it
+  correctly is still available. Adds `priceResolutionMinutes` to the output.
+
+### Fixed
+
+- Failing to fetch prices from Entso-E now raises rather than returning an
+  empty result, which the caller then died on with a `KeyError`. An empty
+  series and an unsupported resolution likewise raise instead of producing a
+  `IndexError` or tripping a bare `assert` that disappears under `python -O`.
+- Secret redaction in logs now uses the log record factory rather than a
+  `logging.Filter`. A filter attached to a logger never sees records
+  propagating up from child loggers, and urllib3 emits its retry warnings --
+  which contain the full request URL, and the Entso-E token rides in the query
+  string -- from `urllib3.connectionpool`. The redaction was therefore inert
+  for the one case it existed to cover.
+- Hovering the chart highlighted each series at a different time. Chart.js's
+  "index" interaction mode aligns series by position in the array rather than
+  by timestamp, and Entso-E omits repeated prices, so the price series carries
+  gaps that the evenly sampled Fingrid series do not -- pushing the readings
+  further apart the further right you hovered.
+- The day/night transfer fee was chosen using the browser's timezone rather
+  than Finland's, so the rate stepped at the wrong moment for anyone reading
+  the page from another zone.
+- Corrected the tariff rates, which had drifted in three separate ways. The
+  electricity tax and the security-of-supply fee were still grossed up at 24%
+  VAT: only the spot multiplier was updated when VAT rose to 25.5% in September
+  2024. The security-of-supply fee itself rose from 0.013 to 0.085 c/kWh on
+  2026-04-01. The transfer tariff had also moved. Together these understated
+  the real price by 0.22 c/kWh during the day and 0.14 c/kWh at night.
+
+### Removed
+
+- `tox` and `tox-uv` from the dev extras. There has never been a tox config,
+  so they could not run.
+
 ## 0.5.1 - [2024-10-04]
 
 ### Fixed

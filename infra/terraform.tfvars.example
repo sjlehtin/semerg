@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and adjust. Defaults are in variables.tf.
+
+# region      = "eu-north-1"
+# bucket_name = "semeai-energy-v2"
+
+# The OIDC provider is one per AWS account. If another project already added
+# token.actions.githubusercontent.com, set this to false.
+# create_oidc_provider = true
+
+# Temporarily allow a branch to deploy during initial setup, then remove it.
+# allowed_git_refs = ["refs/heads/main", "refs/heads/feature/vite-redesign-and-actions"]

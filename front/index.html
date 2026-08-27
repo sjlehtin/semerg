@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="/semeai-logo.png" />
+    <title>Electricity prices and wind power</title>
+    <meta
+      name="description"
+      content="Finnish day-ahead electricity prices, wind and solar production, and the cheapest times to run household appliances."
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="min-h-screen antialiased">
+    <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+      <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Electricity prices &amp; wind power
+          </h1>
+          <p
+            id="coverage"
+            class="mt-1 text-sm"
+            style="color: var(--text-muted)"
+          ></p>
+        </div>
+        <p
+          id="updated"
+          class="text-sm tabular-nums"
+          style="color: var(--text-muted)"
+        ></p>
+      </header>
+
+      <div
+        id="error"
+        hidden
+        class="card mb-6 p-4 text-sm"
+        style="border-color: var(--now-line); color: var(--now-line)"
+      ></div>
+
+      <section class="card mb-6 p-3 sm:p-4">
+        <div class="h-[22rem] sm:h-[30rem]">
+          <canvas id="energy"></canvas>
+        </div>
+      </section>
+
+      <section class="mb-6">
+        <div class="mb-3 flex items-baseline justify-between gap-3">
+          <h2 class="text-lg font-semibold">Cheapest time to run</h2>
+          <button
+            id="clear-highlight"
+            hidden
+            class="text-sm underline underline-offset-2"
+            style="color: var(--text-muted)"
+          >
+            Clear highlight
+          </button>
+        </div>
+        <div
+          id="tasks"
+          class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        ></div>
+      </section>
+
+      <footer
+        class="space-y-2 border-t pt-5 text-xs leading-relaxed"
+        style="border-color: var(--border); color: var(--text-muted)"
+      >
+        <p id="tariff-note"></p>
+        <p>
+          Appliance costs assume a constant power draw for the whole run. Real
+          appliances vary — a dishwasher heats water early, a sauna stove cycles
+          once it is up to temperature — so treat the figures as a comparison
+          between start times rather than a prediction of your bill.
+        </p>
+        <p>
+          Prices from the ENTSO-E Transparency Platform, production data from
+          Fingrid. Source code on
+          <a
+            class="underline underline-offset-2"
+            href="https://github.com/sjlehtin/semerg"
+            >GitHub</a
+          >.
+        </p>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
