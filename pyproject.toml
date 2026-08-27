@@ -27,8 +27,11 @@ version = {attr = "semerg.__version__"}
 Homepage = "https://github.com/sjlehtin/semerg"
 
 [project.optional-dependencies]
+# `tox` and `tox-uv` used to be listed here but there has never been a tox
+# config, so they could not run. CI invokes pytest directly.
 dev = [
     "pytest",
-    "tox",
-    "tox-uv"
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
