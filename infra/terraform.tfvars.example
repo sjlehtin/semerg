@@ -9,3 +9,16 @@
 
 # Temporarily allow a branch to deploy during initial setup, then remove it.
 # allowed_git_refs = ["refs/heads/main", "refs/heads/feature/vite-redesign-and-actions"]
+
+# Hostnames to serve on, beyond the default *.cloudfront.net name. Each needs a
+# DNS record pointing at the `distribution_domain` output, and an ISSUED ACM
+# certificate in us-east-1 covering it.
+#
+# Bring a new hostname up alongside the old service first; moving an existing
+# one is a separate step, since a hostname can only be attached to one
+# distribution at a time. See "Moving the public hostname" in README.md.
+# aliases = ["energy2.semeai.fi"]
+
+# Domain of the certificate to look up. A wildcard covers any single-label
+# subdomain. Only read when `aliases` is non-empty.
+# certificate_domain = "*.semeai.fi"

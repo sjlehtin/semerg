@@ -24,3 +24,17 @@ provider "aws" {
     }
   }
 }
+
+# CloudFront only accepts certificates from us-east-1, wherever the bucket and
+# the distribution itself happen to live.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project   = "semerg"
+      ManagedBy = "terraform"
+    }
+  }
+}

@@ -1,6 +1,21 @@
 output "site_url" {
-  description = "The new endpoint. Soak here before repointing the live URL."
+  description = "The distribution's own endpoint. Always works, whatever aliases are set."
   value       = "https://${aws_cloudfront_distribution.site.domain_name}"
+}
+
+output "custom_urls" {
+  description = "Configured hostnames. Each needs a DNS record pointing at distribution_domain."
+  value       = [for a in var.aliases : "https://${a}"]
+}
+
+output "distribution_domain" {
+  description = "CNAME target for every hostname in custom_urls."
+  value       = aws_cloudfront_distribution.site.domain_name
+}
+
+output "distribution_id" {
+  description = "Needed by `aws cloudfront associate-alias` when moving a hostname here."
+  value       = aws_cloudfront_distribution.site.id
 }
 
 output "bucket_name" {

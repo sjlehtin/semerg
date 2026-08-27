@@ -46,6 +46,15 @@ resource "aws_cloudfront_response_headers_policy" "security" {
   }
 }
 
+data "aws_acm_certificate" "site" {
+  count    = length(var.aliases) > 0 ? 1 : 0
+  provider = aws.us_east_1
+
+  domain      = var.certificate_domain
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
 resource "aws_cloudfront_distribution" "site" {
   enabled         = true
   comment         = "semerg static site"
@@ -56,6 +65,8 @@ resource "aws_cloudfront_distribution" "site" {
   # Without this, a request for / returns an S3 AccessDenied XML document
   # rather than the page -- which looks like a permissions problem and is not.
   default_root_object = "index.html"
+
+  aliases = var.aliases
 
   origin {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
@@ -80,20 +91,26 @@ resource "aws_cloudfront_distribution" "site" {
     }
   }
 
-  viewer_certificate {
-    # The default *.cloudfront.net certificate.
-    #
-    # This pins the distribution to CloudFront's "TLSv1" security policy, which
-    # still permits TLS 1.0 and 1.1 and includes 3DES ciphers. CloudFront
-    # rejects minimum_protocol_version while this is set, so it cannot be
-    # tightened here -- the only fix is a custom domain with an ACM certificate
-    # in us-east-1, at which point set:
-    #
-    #   ssl_support_method       = "sni-only"
-    #   minimum_protocol_version = "TLSv1.2_2021"
-    #
-    # See infra/README.md. Worth knowing that scanners will flag this, and that
-    # they are right.
-    cloudfront_default_certificate = true
+  # Only looked up when a custom hostname is actually configured, so the
+  # default *.cloudfront.net setup needs no certificate to exist.
+  dynamic "viewer_certificate" {
+    for_each = length(var.aliases) > 0 ? [1] : []
+    content {
+      acm_certificate_arn = data.aws_acm_certificate.site[0].arn
+      ssl_support_method  = "sni-only"
+
+      # Only reachable with a custom certificate. The default
+      # *.cloudfront.net one pins the distribution to CloudFront's "TLSv1"
+      # policy, which still permits TLS 1.0 and 1.1 and 3DES ciphers, and
+      # rejects this argument outright.
+      minimum_protocol_version = "TLSv1.2_2021"
+    }
+  }
+
+  dynamic "viewer_certificate" {
+    for_each = length(var.aliases) > 0 ? [] : [1]
+    content {
+      cloudfront_default_certificate = true
+    }
   }
 }
