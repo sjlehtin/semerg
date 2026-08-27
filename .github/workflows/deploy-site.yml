@@ -1,0 +1,152 @@
+name: Deploy site
+
+# Builds the bundle and uploads it. Deliberately independent of the data
+# refresh: see refresh-data.yml. The page fetches data.json at runtime, so a
+# code deploy and a data refresh have nothing to do with each other -- and this
+# workflow must never touch data.json.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "front/**"
+      - ".github/workflows/deploy-site.yml"
+  workflow_dispatch:
+
+concurrency:
+  # Shared with refresh-data so a deploy and a refresh cannot interleave.
+  # Note that GitHub keeps only one pending run per group: a third queued run
+  # cancels the middle one, silently. Acceptable at hourly cadence.
+  group: deploy
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  # Split from `publish` on purpose. `permissions` is job-scoped, so any step in
+  # a job holding `id-token: write` can mint an OIDC token from the environment
+  # and assume the deploy role itself -- ordering the steps does not help,
+  # because a dependency does not need to steal materialised credentials when it
+  # can request its own. `npm ci`, `npm test` and `npm run build` all execute
+  # third-party code, so they run in a job that has no id-token at all.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test
+
+      - run: npm run build
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: site
+          path: front/dist/
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # to request the OIDC token
+      contents: read
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: site
+          path: dist
+
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload
+        env:
+          BUCKET: ${{ vars.S3_BUCKET }}
+        run: |
+          set -euo pipefail
+
+          # Content-hashed assets first, so index.html never references a
+          # bundle that is not up yet. These can be cached forever: the name
+          # changes whenever the content does.
+          aws s3 sync dist/assets/ "s3://$BUCKET/assets/" \
+            --exclude "*.map" \
+            --cache-control "public, max-age=31536000, immutable"
+
+          # Everything else on a short TTL. data.json is excluded because it
+          # belongs to refresh-data.yml, which almost always has fresher data
+          # than whatever was in the build tree.
+          aws s3 sync dist/ "s3://$BUCKET/" \
+            --exclude "*.map" \
+            --exclude "assets/*" \
+            --exclude "data.json" \
+            --exclude "data.sample.json" \
+            --cache-control "public, max-age=60"
+
+          # No --delete, by design. An index.html still sitting in a browser or
+          # edge cache must keep resolving the hashed JS it references.
+
+      - name: Prune superseded assets
+        env:
+          BUCKET: ${{ vars.S3_BUCKET }}
+        run: |
+          set -euo pipefail
+
+          # Pruning happens here, straight after a deploy, rather than on a
+          # schedule. Only at this moment is it knowable which bundle is live:
+          # it is the one the index.html we just uploaded points at. An
+          # age-based rule cannot tell that, and since deploys are infrequent
+          # the live bundle soon becomes the oldest object under assets/ --
+          # so a scheduled "delete anything older than N days" job would
+          # eventually take the site down.
+          #
+          # Scanning the built assets as well as index.html, not just
+          # index.html: a dynamic import() produces a chunk referenced only
+          # from another chunk, and a font or image referenced from the CSS
+          # appears only there. Neither exists today; both would be deleted
+          # while live if this only read index.html.
+          grep -ohaE 'assets/[A-Za-z0-9._-]+' \
+            dist/index.html dist/assets/* 2>/dev/null \
+            | sort -u > referenced.txt
+
+          # Keep recent assets regardless: a reader may still be holding an
+          # older index.html from before the last deploy.
+          cutoff="$(date -u -d '30 days ago' +%s)"
+
+          # Compared in the shell rather than with a JMESPath `<` on the
+          # timestamp string: ordering comparators are specified for numbers,
+          # so string comparison there is undefined behaviour that happens to
+          # work.
+          aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "assets/" \
+            --query 'Contents[].[Key,LastModified]' --output text \
+            > listing.txt || true
+
+          : > old.txt
+          while read -r key modified; do
+            [ -n "${key:-}" ] || continue
+            [ "$key" != "None" ] || continue
+            if [ "$(date -u -d "$modified" +%s)" -lt "$cutoff" ]; then
+              echo "$key" >> old.txt
+            fi
+          done < listing.txt
+          sort -u -o old.txt old.txt
+
+          comm -23 old.txt referenced.txt | while read -r key; do
+            [ -n "$key" ] || continue
+            echo "Removing superseded asset: $key"
+            aws s3 rm "s3://$BUCKET/$key"
+          done

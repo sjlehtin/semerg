@@ -1,0 +1,120 @@
+name: Refresh data
+
+# Fetches prices and production data on a schedule.
+#
+# Runs at :07 rather than on the hour: GitHub's scheduler is congested at the
+# top of the hour and delays runs by 5-20 minutes. Nord Pool publishes the next
+# day around 12:45 CET, so an hourly job picks it up regardless.
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  # The API tokens and the AWS role never live in the same job. This one holds
+  # the tokens and has no id-token, so nothing it runs can assume the deploy
+  # role; the publish job has the role and never sees the tokens.
+  gather:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - run: pip install -e .
+
+      - name: Gather
+        env:
+          SEMERG_ENTSOE_TOKEN: ${{ secrets.SEMERG_ENTSOE_TOKEN }}
+          SEMERG_FINGRID_TOKEN: ${{ secrets.SEMERG_FINGRID_TOKEN }}
+        run: |
+          semerg gather-data --wait-between-requests 5 --retries 3 \
+            --output data.json
+
+      # Structural checks that need no knowledge of what is already published.
+      - run: semerg validate-data data.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: data
+          path: data.json
+          retention-days: 1
+
+  publish:
+    needs: gather
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      # Runs before credentials are configured, but note that ordering is not
+      # what protects this: `permissions` is job-scoped, so any step here could
+      # mint its own OIDC token. What makes it acceptable is that this installs
+      # only first-party code plus click and requests -- unlike the frontend's
+      # dependency tree, which is why deploy-site.yml keeps `npm ci` in a job
+      # with no id-token at all.
+      - run: pip install -e .
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: data
+
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Check against what is already published
+        env:
+          BUCKET: ${{ vars.S3_BUCKET }}
+        run: |
+          set -euo pipefail
+
+          # `gather-data --output` truncates its target the moment it opens it,
+          # so a failed fetch leaves a plausible-looking partial file behind.
+          # Never publish without checking, and never publish a series shorter
+          # than the one already live.
+          #
+          # head-object rather than `if aws s3 cp ... 2>/dev/null`: that form
+          # swallows every failure, so an AccessDenied, a transient 5xx or a
+          # mistyped bucket would all be read as "nothing published yet" and
+          # the comparison would be skipped exactly when it matters most. This
+          # distinguishes a genuinely absent object from a broken read, and
+          # fails closed on the latter.
+          if aws s3api head-object --bucket "$BUCKET" --key data.json \
+               >/dev/null 2>head-err.txt; then
+            aws s3 cp "s3://$BUCKET/data.json" published.json
+            semerg validate-data data.json --compare-to published.json
+          elif grep -qE '(404|Not Found)' head-err.txt; then
+            echo "Nothing published yet; validating on its own."
+            semerg validate-data data.json
+          else
+            echo "Could not read the published data.json:" >&2
+            cat head-err.txt >&2
+            exit 1
+          fi
+
+      - name: Publish
+        env:
+          BUCKET: ${{ vars.S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          aws s3 cp data.json "s3://$BUCKET/data.json" \
+            --cache-control "public, max-age=60, stale-if-error=86400"
