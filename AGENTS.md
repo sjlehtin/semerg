@@ -49,6 +49,24 @@ npm test                     # Vitest
 
 Both `pytest` and `npm test` must pass before anything is merged.
 
+## Branches and pull requests
+
+Work lands on `main` through a pull request from a feature branch, named
+`feature/<short-description>`. Never commit to `main` directly, and never push
+a branch's work by fast-forwarding `main` onto it.
+
+```bash
+git switch -c feature/update-dependencies
+```
+
+This is a deployment rule as much as a review one. `deploy-site.yml` triggers on
+pushes to `main`, and the deploy role's trust policy is scoped to
+`refs/heads/main` (`github_oidc_subjects` in `infra/variables.tf`). A commit
+pushed straight to `main` is a production deploy that nobody reviewed.
+
+CI runs on every branch, so a PR arrives with `pytest` and `npm test` already
+green.
+
 ## Secrets
 
 Tokens are read from environment variables first, falling back to a TOML file at
