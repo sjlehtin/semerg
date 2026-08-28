@@ -11,9 +11,8 @@ const dataFile = fileURLToPath(new URL("./public/data.json", import.meta.url));
  *
  * Vite serves publicDir as plain static files and does not watch it, so a
  * `semerg gather-data --output front/public/data.json` -- or an edit to the
- * fixture -- produced no visible change until the page's own five-minute poll
- * came round. Source edits were never the problem: those hot-update or reload
- * already.
+ * fixture -- otherwise shows up only when the page's own five-minute poll comes
+ * round. Source edits are already covered by HMR.
  *
  * Sends a plain reload rather than a custom event, so that nothing has to
  * listen for it: a custom event would need an `import.meta.hot` block in

@@ -15,9 +15,9 @@ const DEFAULT_RESOLUTION_MINUTES = 15;
 /**
  * Turn raw price points into priced slots.
  *
- * `resolutionMinutes` is read from the data where present, and defaults for
- * files written before the field existed -- an old bundle may be paired with
- * new data and vice versa, so neither side may assume the other's version.
+ * `resolutionMinutes` is optional and defaults when absent. Assets are
+ * immutable, so an old bundle may be paired with new data and vice versa;
+ * neither side may assume the other's version.
  */
 export function toSlots(data) {
   const resolution = data.priceResolutionMinutes ?? DEFAULT_RESOLUTION_MINUTES;

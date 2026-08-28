@@ -7,10 +7,10 @@
  * transfer fee. They are modelled separately here so that supporting a second
  * contract later means adding data, not rewriting arithmetic.
  *
- * Every rate is stored EXCLUDING VAT, which is then applied once. Storing
- * VAT-inclusive figures is what caused this to be wrong for over a year: when
- * VAT went 24% -> 25.5% in September 2024 only the spot multiplier was updated,
- * and the four baked-in constants silently kept the old rate.
+ * Every rate is stored EXCLUDING VAT, which is then applied once, so that a
+ * VAT change touches one constant rather than five. A VAT-inclusive constant
+ * goes stale silently: nothing in the arithmetic reveals which rate it was
+ * baked at.
  *
  * Where a source publishes an inclusive figure, derive it with `exVat()` rather
  * than dividing by hand, so the published number stays visible in the code and
@@ -41,7 +41,7 @@ export const national = {
   // Source: Vantaan Energia Sähköverkot verkkopalveluhinnasto, which lists
   // 2.24 ex-VAT / 2.81120 incl.
   electricityTax: 2.24,
-  // Huoltovarmuusmaksu. Raised from 0.013 to 0.085 on 2026-04-01.
+  // Huoltovarmuusmaksu, in force since 2026-04-01.
   // Source: Energiavirasto.
   securityOfSupply: 0.085,
   /**
