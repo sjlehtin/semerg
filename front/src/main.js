@@ -8,10 +8,9 @@ import { supplier, transmission, VAT_RATE, ZONE } from "./tariff.js";
 /**
  * How often to pull fresh data.
  *
- * The page used to reload itself with a meta refresh. It no longer does, so
- * that a reader does not lose their scroll position or a highlighted window
- * every ten minutes -- which means everything time-dependent, including the
- * "now" marker, has to be updated here instead.
+ * The page never reloads itself, so that a reader keeps their scroll position
+ * and any highlighted window. Everything time-dependent, including the "now"
+ * marker, is updated on this interval instead.
  */
 const REFRESH_MS = 5 * 60 * 1000;
 

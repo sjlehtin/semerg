@@ -49,6 +49,35 @@ npm test                     # Vitest
 
 Both `pytest` and `npm test` must pass before anything is merged.
 
+## Branches and pull requests
+
+Work lands on `main` through a pull request from a feature branch, named
+`feature/<short-description>`. Never commit to `main` directly, and never push
+a branch's work by fast-forwarding `main` onto it.
+
+```bash
+git switch -c feature/update-dependencies
+```
+
+This is a deployment rule as much as a review one. `deploy-site.yml` triggers on
+pushes to `main`, and the deploy role's trust policy is scoped to
+`refs/heads/main` (`github_oidc_subjects` in `infra/variables.tf`). A commit
+pushed straight to `main` is a production deploy that nobody reviewed.
+
+CI runs on every branch, so a PR arrives with `pytest` and `npm test` already
+green.
+
+**Agents do not open pull requests.** There is no `gh` and no API token on the
+machine, and opening one is a human decision. An agent takes the work to the
+point where a PR is one click away:
+
+1. Commit to a feature branch and push it.
+2. Write the description to `pr-description.md` in the repository root
+   (gitignored, one branch's worth at a time): what changed, why, and what a
+   reviewer should check. Keep it scannable.
+3. Report the compare link, which opens the form prefilled:
+   `https://github.com/sjlehtin/semerg/compare/main...<branch>?expand=1`
+
 ## Secrets
 
 Tokens are read from environment variables first, falling back to a TOML file at
@@ -194,3 +223,11 @@ Two workflow rules that are easy to undo by accident:
   small and deliberately plain.
 - Prefer fixing the cause over adding a workaround, and say so in the commit
   message when behaviour changes.
+- **Comments describe the code as it stands**, not how it got there. A comment
+  earns its place by explaining a live constraint or a non-obvious why. What a
+  function used to do, what a value used to be, which approach was tried first
+  — that belongs in the commit message and the ChangeLog, which is where
+  someone goes when they want the history.
+- **Keep commit messages short.** Subject line, and a body only where the diff
+  genuinely does not speak for itself. State the current reason; skip the
+  narrative of what was wrong before.

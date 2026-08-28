@@ -3,6 +3,10 @@ build/
 dist/
 src/semerg.egg-info/
 
+# Handover for a PR the human opens by hand. Describes one branch, and is
+# rewritten for the next -- so it is never committed.
+pr-description.md
+
 front/node_modules/
 # Seeded from data.sample.json for local development, overwritten by real
 # fetches. The sample is committed; this is not.
