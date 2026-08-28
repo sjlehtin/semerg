@@ -212,3 +212,11 @@ Two workflow rules that are easy to undo by accident:
   small and deliberately plain.
 - Prefer fixing the cause over adding a workaround, and say so in the commit
   message when behaviour changes.
+- **Comments describe the code as it stands**, not how it got there. A comment
+  earns its place by explaining a live constraint or a non-obvious why. What a
+  function used to do, what a value used to be, which approach was tried first
+  — that belongs in the commit message and the ChangeLog, which is where
+  someone goes when they want the history.
+- **Keep commit messages short.** Subject line, and a body only where the diff
+  genuinely does not speak for itself. State the current reason; skip the
+  narrative of what was wrong before.
