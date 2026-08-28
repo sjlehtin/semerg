@@ -5,7 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 dynamic = ["version"]
 name = "semerg"
-dependencies = ["click>=8.1.7", "requests>=2.31.0"]
+# requests is floored at 2.32.4: earlier releases leak .netrc credentials
+# to the redirect target (CVE-2024-47081).
+dependencies = ["click>=8.1.7", "requests>=2.32.4"]
 requires-python = ">= 3.11"
 readme = "README.md"
 classifiers = [

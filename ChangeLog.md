@@ -74,6 +74,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tox` and `tox-uv` from the dev extras. There has never been a tox config,
   so they could not run.
 
+### Security
+
+- Updated Vite to 8 and Vitest to 4, clearing five advisories in the frontend
+  toolchain -- among them a critical one where the Vitest UI server, while
+  listening, would read and execute an arbitrary file. Both are build-time
+  dependencies only, so no shipped bundle carried the flaw. CI moves to Node
+  22 with them: Vite 8 requires `^20.19 || >=22.12`, and Node 20 is past end of
+  life.
+- Floored `requests` at 2.32.4. Earlier releases leak `.netrc` credentials to
+  the target of a redirect (CVE-2024-47081).
+
 ## 0.5.1 - [2024-10-04]
 
 ### Fixed
