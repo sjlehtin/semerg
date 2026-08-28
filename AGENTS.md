@@ -67,6 +67,17 @@ pushed straight to `main` is a production deploy that nobody reviewed.
 CI runs on every branch, so a PR arrives with `pytest` and `npm test` already
 green.
 
+**Agents do not open pull requests.** There is no `gh` and no API token on the
+machine, and opening one is a human decision. An agent takes the work to the
+point where a PR is one click away:
+
+1. Commit to a feature branch and push it.
+2. Write the description to `pr-description.md` in the repository root
+   (gitignored, one branch's worth at a time): what changed, why, and what a
+   reviewer should check. Keep it scannable.
+3. Report the compare link, which opens the form prefilled:
+   `https://github.com/sjlehtin/semerg/compare/main...<branch>?expand=1`
+
 ## Secrets
 
 Tokens are read from environment variables first, falling back to a TOML file at
