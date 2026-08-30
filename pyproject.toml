@@ -34,5 +34,10 @@ dev = [
     "ruff",
 ]
 
+# Pinned at ruff's current default so that a change to that default cannot
+# reformat the codebase on its own.
+[tool.ruff]
+line-length = 88
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
