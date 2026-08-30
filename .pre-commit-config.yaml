@@ -1,0 +1,18 @@
+# Run with `prek run --all-files`; `prek install` wires it into git commit.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # Prettier runs from front/node_modules rather than a mirror repo, so the
+  # hook and `npm run format` can never disagree about the version.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: npx --prefix front prettier --write --ignore-path front/.prettierignore
+        language: system
+        files: ^front/.*\.(js|mjs|css|html|json|md)$

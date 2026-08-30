@@ -30,6 +30,7 @@ Homepage = "https://github.com/sjlehtin/semerg"
 
 [project.optional-dependencies]
 dev = [
+    "prek",
     "pytest",
     "ruff",
 ]
