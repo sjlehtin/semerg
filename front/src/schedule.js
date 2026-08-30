@@ -143,7 +143,6 @@ export function recommend({ slots, resolution, task, durationMinutes, now }) {
     energyKwh: energyOf(task.powerKw, durationMinutes),
     costNow: nowCost,
     saving: nowCost === null ? null : nowCost - cheapest.cost,
-    startingNow:
-      nowCost !== null && Math.abs(nowCost - cheapest.cost) < 0.005,
+    startingNow: nowCost !== null && Math.abs(nowCost - cheapest.cost) < 0.005,
   };
 }

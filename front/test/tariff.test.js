@@ -28,15 +28,50 @@ import { priceFor, transmission, ZONE } from "../src/tariff.js";
  * The supplier margin was already correct at 0.50 incl. VAT.
  */
 const CURRENT_BEHAVIOUR = [
-  ["06:59 Helsinki, winter — night rate", "2025-12-01T04:59:00+00:00", 10.0, 17.38602500],
-  ["07:00 Helsinki, winter — day rate begins", "2025-12-01T05:00:00+00:00", 10.0, 19.26852500],
-  ["21:59 Helsinki, winter — last day slot", "2025-12-01T19:59:00+00:00", 10.0, 19.26852500],
-  ["22:00 Helsinki, winter — night rate resumes", "2025-12-01T20:00:00+00:00", 10.0, 17.38602500],
-  ["07:00 Helsinki, summer — day rate across DST", "2025-07-01T04:00:00+00:00", 10.0, 19.26852500],
-  ["06:59 Helsinki, summer — night rate across DST", "2025-07-01T03:59:00+00:00", 10.0, 17.38602500],
-  ["negative spot — not marked up by VAT", "2025-12-01T12:00:00+00:00", -2.5, 4.21852500],
-  ["zero spot", "2025-12-01T12:00:00+00:00", 0.0, 6.71852500],
-  ["high spot, daytime", "2025-12-01T12:00:00+00:00", 45.67, 64.03437500],
+  [
+    "06:59 Helsinki, winter — night rate",
+    "2025-12-01T04:59:00+00:00",
+    10.0,
+    17.386025,
+  ],
+  [
+    "07:00 Helsinki, winter — day rate begins",
+    "2025-12-01T05:00:00+00:00",
+    10.0,
+    19.268525,
+  ],
+  [
+    "21:59 Helsinki, winter — last day slot",
+    "2025-12-01T19:59:00+00:00",
+    10.0,
+    19.268525,
+  ],
+  [
+    "22:00 Helsinki, winter — night rate resumes",
+    "2025-12-01T20:00:00+00:00",
+    10.0,
+    17.386025,
+  ],
+  [
+    "07:00 Helsinki, summer — day rate across DST",
+    "2025-07-01T04:00:00+00:00",
+    10.0,
+    19.268525,
+  ],
+  [
+    "06:59 Helsinki, summer — night rate across DST",
+    "2025-07-01T03:59:00+00:00",
+    10.0,
+    17.386025,
+  ],
+  [
+    "negative spot — not marked up by VAT",
+    "2025-12-01T12:00:00+00:00",
+    -2.5,
+    4.218525,
+  ],
+  ["zero spot", "2025-12-01T12:00:00+00:00", 0.0, 6.718525],
+  ["high spot, daytime", "2025-12-01T12:00:00+00:00", 45.67, 64.034375],
 ];
 
 describe("priceFor", () => {

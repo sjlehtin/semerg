@@ -2,17 +2,20 @@ import datetime
 import json
 import logging
 import os
+import time
 import tomllib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import click
 import requests
-import time
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+
+logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path("~/.semerg/config")
 
@@ -84,44 +87,28 @@ def read_config():
         if not entsoe_token:
             entsoe_token = data.get("entsoe", {}).get("security-token")
         if not fingrid_token:
-            fingrid_token = data.get("fingrid", {}).get(
-                "authentication-token")
+            fingrid_token = data.get("fingrid", {}).get("authentication-token")
 
     missing = []
     if not entsoe_token:
-        missing.append(f"Entso-E ({ENTSOE_TOKEN_ENV} or "
-                       f"[entsoe] security-token)")
+        missing.append(f"Entso-E ({ENTSOE_TOKEN_ENV} or [entsoe] security-token)")
     if not fingrid_token:
-        missing.append(f"Fingrid ({FINGRID_TOKEN_ENV} or "
-                       f"[fingrid] authentication-token)")
+        missing.append(
+            f"Fingrid ({FINGRID_TOKEN_ENV} or [fingrid] authentication-token)"
+        )
     if missing:
         raise ConfigError(
             "No token found for: " + ", ".join(missing) + ". Set the "
-            f"environment variable, or add it to {CONFIG_PATH}.")
+            f"environment variable, or add it to {CONFIG_PATH}."
+        )
 
-    return Config(entsoe_security_token=entsoe_token,
-                  fingrid_authentication_token=fingrid_token)
-
-
-def redact(text, config):
-    """Strip API tokens out of text destined for a log.
-
-    The Entso-E token travels as a query parameter, so it turns up in any URL
-    that gets logged. This repository is public and its CI logs are world
-    readable, which makes that a credential leak rather than a cosmetic issue.
-    """
-    if not text:
-        return text
-    text = str(text)
-    for token in (config.entsoe_security_token,
-                  config.fingrid_authentication_token):
-        if token:
-            text = text.replace(token, "<redacted>")
-    return text
+    return Config(
+        entsoe_security_token=entsoe_token, fingrid_authentication_token=fingrid_token
+    )
 
 
 def to_iso8601(cap):
-    start = f'{cap.strftime("%Y-%m-%d %H:%M:%S")}Z'.replace(" ", "T")
+    start = f"{cap.strftime('%Y-%m-%d %H:%M:%S')}Z".replace(" ", "T")
     return start
 
 
@@ -158,8 +145,8 @@ def _redacting_record_factory(inner):
             record.msg = redact(record.msg)
         if record.args:
             record.args = tuple(
-                redact(arg) if isinstance(arg, str) else arg
-                for arg in record.args)
+                redact(arg) if isinstance(arg, str) else arg for arg in record.args
+            )
         return record
 
     return factory
@@ -176,10 +163,10 @@ def install_log_redaction(config):
     this exists to catch. The record factory runs for every record created
     anywhere in the process.
     """
-    register_secret(config.entsoe_security_token,
-                    config.fingrid_authentication_token)
+    register_secret(config.entsoe_security_token, config.fingrid_authentication_token)
     logging.setLogRecordFactory(
-        _redacting_record_factory(logging.getLogRecordFactory()))
+        _redacting_record_factory(logging.getLogRecordFactory())
+    )
 
 
 def make_session(retries=0):
@@ -190,23 +177,36 @@ def make_session(retries=0):
     """
     session = requests.Session()
     if retries:
-        retry = Retry(total=retries, backoff_factor=1.0,
-                      status_forcelist=(429, 500, 502, 503, 504),
-                      allowed_methods=("GET",), raise_on_status=False)
+        retry = Retry(
+            total=retries,
+            backoff_factor=1.0,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET",),
+            raise_on_status=False,
+        )
         session.mount("https://", HTTPAdapter(max_retries=retry))
     return session
 
 
 @cli.command
 @click.option("--include-overhead", default=True, help="Calculate overhead")
-@click.option("--date", metavar="DATE",
-              help="Start fetch from DATE, default to today")
-@click.option("--wait-between-requests", "--throttle", "delay", type=float, metavar="DELAY",
-              help="Pause for DELAY seconds between requests to allow API endpoint to cooldown")
-@click.option("--retries", type=int, default=0, metavar="N",
-              help="Retry a failed request up to N times, backing off between "
-                   "attempts")
-@click.option("--output", type=click.File('w'))
+@click.option("--date", metavar="DATE", help="Start fetch from DATE, default to today")
+@click.option(
+    "--wait-between-requests",
+    "--throttle",
+    "delay",
+    type=float,
+    metavar="DELAY",
+    help="Pause for DELAY seconds between requests to allow API endpoint to cooldown",
+)
+@click.option(
+    "--retries",
+    type=int,
+    default=0,
+    metavar="N",
+    help="Retry a failed request up to N times, backing off between attempts",
+)
+@click.option("--output", type=click.File("w"))
 def gather_data(include_overhead, date, delay, retries, output):
     """
     Write energy prices and production timeseries to the specified
@@ -221,9 +221,9 @@ def gather_data(include_overhead, date, delay, retries, output):
     else:
         dt = datetime.datetime.strptime(date, "%Y-%m-%d").astimezone()
 
-    start_time = datetime.datetime(year=dt.year, month=dt.month, day=dt.day,
-                            tzinfo=dt.tzinfo).astimezone(
-        datetime.timezone.utc)
+    start_time = datetime.datetime(
+        year=dt.year, month=dt.month, day=dt.day, tzinfo=dt.tzinfo
+    ).astimezone(datetime.UTC)
     start_time_stamp = to_iso8601(start_time)
 
     end_time = start_time + datetime.timedelta(days=2)
@@ -236,60 +236,64 @@ def gather_data(include_overhead, date, delay, retries, output):
 
     entsoe_security_token = config.entsoe_security_token
 
-    entsoe_data = pull_entsoe_data(entsoe_security_token, start_time,
-                                   end_time, session=session)
-    series = entsoe_data['series']
+    entsoe_data = pull_entsoe_data(
+        entsoe_security_token, start_time, end_time, session=session
+    )
+    series = entsoe_data["series"]
 
     fetched_data = {
-        'fetchTime': datetime.datetime.now(
-            tz=datetime.timezone.utc).isoformat(),
-        'startTime': start_time_stamp,
-        'endTime': end_time_stamp,
-        'priceResolutionMinutes': int(
-            PRICE_RESOLUTION.total_seconds() // 60),
-        'basePrices': series
+        "fetchTime": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+        "startTime": start_time_stamp,
+        "endTime": end_time_stamp,
+        "priceResolutionMinutes": int(PRICE_RESOLUTION.total_seconds() // 60),
+        "basePrices": series,
     }
 
     # Entsoe-E might return more than we asked, let's enrich the data with
     # production data up until that point.
-    start_time_stamp = series[0]['startTime']
+    start_time_stamp = series[0]["startTime"]
     click.echo(
         f"Fetching production data from Fingrid between {start_time_stamp} and "
-        f"{end_time_stamp}")
+        f"{end_time_stamp}"
+    )
 
     try:
         wind_production, wind_production_times = get_production_data(
-            config, 75, start_time_stamp, end_time_stamp, session=session)
+            config, 75, start_time_stamp, end_time_stamp, session=session
+        )
 
-        fetched_data['windProduction'] = [
-            {'startTime': ts.isoformat(), 'energy': pr}
-            for ts, pr in zip(wind_production_times, wind_production)]
+        fetched_data["windProduction"] = [
+            {"startTime": ts.isoformat(), "energy": pr}
+            for ts, pr in zip(wind_production_times, wind_production)
+        ]
 
         if delay:
             time.sleep(delay)
 
-        wind_production_forecast, wind_production_forecast_times = (
-            get_production_data(
-                config, 245, start_time_stamp, end_time_stamp,
-                session=session))
+        wind_production_forecast, wind_production_forecast_times = get_production_data(
+            config, 245, start_time_stamp, end_time_stamp, session=session
+        )
 
-        fetched_data['windProductionForecast'] = [
-            {'startTime': ts.isoformat(), 'energy': pr}
-            for ts, pr in zip(wind_production_forecast_times,
-                              wind_production_forecast)]
+        fetched_data["windProductionForecast"] = [
+            {"startTime": ts.isoformat(), "energy": pr}
+            for ts, pr in zip(wind_production_forecast_times, wind_production_forecast)
+        ]
 
         if delay:
             time.sleep(delay)
 
         solar_production_forecast, solar_production_forecast_times = (
             get_production_data(
-                config, 247, start_time_stamp, end_time_stamp,
-                session=session))
+                config, 247, start_time_stamp, end_time_stamp, session=session
+            )
+        )
 
-        fetched_data['solarProductionForecast'] = [
-            {'startTime': ts.isoformat(), 'energy': pr}
-            for ts, pr in zip(solar_production_forecast_times,
-                              solar_production_forecast)]
+        fetched_data["solarProductionForecast"] = [
+            {"startTime": ts.isoformat(), "energy": pr}
+            for ts, pr in zip(
+                solar_production_forecast_times, solar_production_forecast
+            )
+        ]
     except APIError as e:
         # Fingrid outages are tolerated: prices are the point of this tool and
         # the page renders without production data. The keys are simply absent,
@@ -304,7 +308,7 @@ resolutions = {
     "PT15M": datetime.timedelta(minutes=15),
     "PT30M": datetime.timedelta(minutes=30),
     "PT60M": datetime.timedelta(minutes=60),
-    "P1D": datetime.timedelta(days=1)
+    "P1D": datetime.timedelta(days=1),
 }
 
 
@@ -318,23 +322,28 @@ def parse_period(period):
     happens here.
     """
     interval_start = datetime.datetime.fromisoformat(
-        period.find("{*}timeInterval/{*}start").text.replace("Z", "+00:00"))
+        period.find("{*}timeInterval/{*}start").text
+    )
     interval_end = datetime.datetime.fromisoformat(
-        period.find("{*}timeInterval/{*}end").text.replace("Z", "+00:00"))
+        period.find("{*}timeInterval/{*}end").text
+    )
 
     received_resolution = period.find("{*}resolution").text
     if received_resolution not in resolutions:
         raise APIError(
             f"Unsupported resolution {received_resolution!r} in Entso-E "
             f"response; known resolutions are "
-            f"{', '.join(sorted(resolutions))}.")
+            f"{', '.join(sorted(resolutions))}."
+        )
     resolution = resolutions[received_resolution]
 
     points = sorted(
-        ((int(pt.find("{*}position").text),
-          float(pt.find("{*}price.amount").text))
-         for pt in period.findall("{*}Point")),
-        key=lambda item: item[0])
+        (
+            (int(pt.find("{*}position").text), float(pt.find("{*}price.amount").text))
+            for pt in period.findall("{*}Point")
+        ),
+        key=lambda item: item[0],
+    )
 
     expanded = {}
     for index, (position, price) in enumerate(points):
@@ -354,29 +363,31 @@ def parse_period(period):
     return expanded, interval_start, interval_end
 
 
-def pull_entsoe_data(entsoe_security_token: str, start_time: datetime,
-                     end_time: datetime, session=None):
+def pull_entsoe_data(
+    entsoe_security_token: str, start_time: datetime, end_time: datetime, session=None
+):
     start_time_stamp = start_time.strftime("%Y-%m-%dT%H:%MZ")
     end_time_stamp = end_time.strftime("%Y-%m-%dT%H:%MZ")
-    params = {"documentType": "A44",
-              "securityToken": entsoe_security_token,
-              "timeInterval": f"{start_time_stamp}/{end_time_stamp}",
-              "in_domain": "10YFI-1--------U",
-              "out_domain": "10YFI-1--------U"
-              }
+    params = {
+        "documentType": "A44",
+        "securityToken": entsoe_security_token,
+        "timeInterval": f"{start_time_stamp}/{end_time_stamp}",
+        "in_domain": "10YFI-1--------U",
+        "out_domain": "10YFI-1--------U",
+    }
     click.echo(
-        f"Fetching pricing data from Entso-E between {start_time} and "
-        f"{end_time}")
+        f"Fetching pricing data from Entso-E between {start_time} and {end_time}"
+    )
     getter = session.get if session is not None else requests.get
     response = getter("https://web-api.tp.entsoe.eu/api", params=params)
 
     if response.status_code != 200:
         register_secret(entsoe_security_token)
-        logging.error(
+        logger.error(
             f"Failed to fetch Entso-E data, code: {response.status_code}, "
-            f"data: {redact(response.text)}")
-        raise APIError(
-            f"Failed to fetch Entso-E data, code: {response.status_code}.")
+            f"data: {redact(response.text)}"
+        )
+        raise APIError(f"Failed to fetch Entso-E data, code: {response.status_code}.")
 
     series_start_time = None
     series_end_time = None
@@ -405,18 +416,21 @@ def pull_entsoe_data(entsoe_security_token: str, start_time: datetime,
     if not processed:
         raise APIError(
             "Entso-E returned no price points. Refusing to continue rather "
-            "than publish an empty series.")
+            "than publish an empty series."
+        )
 
     click.echo(
         f"Got {len(processed)} data points from Entso-E, from "
-        f"{processed[0]['startTime']} to {processed[-1]['startTime']}.")
-    return {'series': processed,
-            'start': series_start_time.isoformat(),
-            'end': series_end_time.isoformat()}
+        f"{processed[0]['startTime']} to {processed[-1]['startTime']}."
+    )
+    return {
+        "series": processed,
+        "start": series_start_time.isoformat(),
+        "end": series_end_time.isoformat(),
+    }
 
 
-def get_production_data(config, dataset_id, start_time, end_time,
-                        session=None):
+def get_production_data(config, dataset_id, start_time, end_time, session=None):
     headers = {"x-api-key": config.fingrid_authentication_token}
     params = {
         "startTime": start_time,
@@ -431,13 +445,17 @@ def get_production_data(config, dataset_id, start_time, end_time,
     response = getter(
         f"https://data.fingrid.fi/api/datasets/{dataset_id}/data",
         headers=headers,
-        params=params)
+        params=params,
+    )
     if response.status_code != 200:
         raise APIError(
-            f"Failed to get data from endpoint for dataset {dataset_id}, status {response.status_code}: {response.text} ")
+            f"Failed to get data from endpoint for dataset {dataset_id}, status {response.status_code}: {response.text} "
+        )
     production_raw_data = json.loads(response.content)
-    production_times = [datetime.datetime.fromisoformat(val["startTime"])
-                        for val in production_raw_data["data"]]
+    production_times = [
+        datetime.datetime.fromisoformat(val["startTime"])
+        for val in production_raw_data["data"]
+    ]
     production = [val["value"] for val in production_raw_data["data"]]
     return production, production_times
 
@@ -449,9 +467,10 @@ class ValidationError(Exception):
 def infer_step(points):
     """Smallest positive gap between consecutive points, as a timedelta."""
     gaps = []
-    for earlier, later in zip(points, points[1:]):
-        gap = (datetime.datetime.fromisoformat(later["startTime"])
-               - datetime.datetime.fromisoformat(earlier["startTime"]))
+    for earlier, later in pairwise(points):
+        gap = datetime.datetime.fromisoformat(
+            later["startTime"]
+        ) - datetime.datetime.fromisoformat(earlier["startTime"])
         if gap > datetime.timedelta(0):
             gaps.append(gap)
     if not gaps:
@@ -470,11 +489,9 @@ def coverage_end(data):
 
 def end_of_helsinki_day(now=None):
     """Midnight at the end of the current Finnish day, as an aware datetime."""
-    now = (now or datetime.datetime.now(tz=datetime.timezone.utc)).astimezone(
-        HELSINKI)
+    now = (now or datetime.datetime.now(tz=datetime.UTC)).astimezone(HELSINKI)
     tomorrow = now.date() + datetime.timedelta(days=1)
-    return datetime.datetime.combine(
-        tomorrow, datetime.time(0, 0), tzinfo=HELSINKI)
+    return datetime.datetime.combine(tomorrow, datetime.time(0, 0), tzinfo=HELSINKI)
 
 
 def validate_data(data, previous=None, now=None):
@@ -491,7 +508,8 @@ def validate_data(data, previous=None, now=None):
     if end < required:
         raise ValidationError(
             f"Prices only cover up to {end.astimezone(HELSINKI)}, which is "
-            f"short of the end of the current Finnish day ({required}).")
+            f"short of the end of the current Finnish day ({required})."
+        )
 
     if previous is not None:
         try:
@@ -501,15 +519,20 @@ def validate_data(data, previous=None, now=None):
         if previous_end is not None and end < previous_end:
             raise ValidationError(
                 f"Prices cover up to {end}, which is less than the "
-                f"{previous_end} already published. Refusing to regress.")
+                f"{previous_end} already published. Refusing to regress."
+            )
 
     return end
 
 
 @cli.command("validate-data")
-@click.option("--compare-to", type=click.File("r"), metavar="FILE",
-              help="Refuse to publish if FILE (the currently published data) "
-                   "covers a longer period than the new data")
+@click.option(
+    "--compare-to",
+    type=click.File("r"),
+    metavar="FILE",
+    help="Refuse to publish if FILE (the currently published data) "
+    "covers a longer period than the new data",
+)
 @click.argument("path", type=click.File("r"))
 def validate_data_command(path, compare_to):
     """Check that a gathered data file is fit to publish.
@@ -536,12 +559,21 @@ def validate_data_command(path, compare_to):
     except ValidationError as e:
         raise click.ClickException(str(e))
 
-    missing = [key for key in ("windProduction", "windProductionForecast",
-                               "solarProductionForecast") if key not in data]
+    missing = [
+        key
+        for key in (
+            "windProduction",
+            "windProductionForecast",
+            "solarProductionForecast",
+        )
+        if key not in data
+    ]
     if missing:
         # Fingrid failures are tolerated by design; the page renders without
         # them. Worth reporting, not worth blocking a price update for.
         click.echo(f"Warning: no production data for {', '.join(missing)}.")
 
-    click.echo(f"OK: {len(data['basePrices'])} price points, covering up to "
-               f"{end.astimezone(HELSINKI)}.")
+    click.echo(
+        f"OK: {len(data['basePrices'])} price points, covering up to "
+        f"{end.astimezone(HELSINKI)}."
+    )

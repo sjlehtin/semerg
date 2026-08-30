@@ -9,8 +9,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Explicit, because the repository default may still be read/write. Both jobs
-# install third-party packages and run their code; a GITHUB_TOKEN that can push
+# Explicit, because the repository default may still be read/write. Every job
+# installs third-party packages and runs their code; a GITHUB_TOKEN that can push
 # would let a compromised dev dependency write to main -- which is the exact ref
 # the AWS deploy role trusts.
 permissions:
@@ -29,6 +29,32 @@ jobs:
       - run: pip install -e '.[dev]'
 
       - run: pytest
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      # The prettier hook runs from front/node_modules rather than a mirror
+      # repo, so the hooks cannot run until the install has.
+      - run: npm ci
+        working-directory: front
+
+      # Pinned: an unpinned lint tool turns an unrelated release into a red
+      # build on a day nobody touched the code.
+      - run: pip install prek==0.5.0
+
+      - run: prek run --all-files --show-diff-on-failure
 
   frontend:
     runs-on: ubuntu-latest

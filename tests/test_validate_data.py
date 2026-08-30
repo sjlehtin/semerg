@@ -5,14 +5,18 @@ import pytest
 from semerg import main
 from semerg.main import ValidationError
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 def series(start, count, step_minutes=15):
     """A dense price series of `count` points starting at `start` (UTC)."""
     return [
-        {"startTime": (start + datetime.timedelta(
-            minutes=step_minutes * i)).isoformat(), "price": 5.0}
+        {
+            "startTime": (
+                start + datetime.timedelta(minutes=step_minutes * i)
+            ).isoformat(),
+            "price": 5.0,
+        }
         for i in range(count)
     ]
 
@@ -80,10 +84,14 @@ def test_a_corrupt_published_file_does_not_block_a_good_one():
     assert main.validate_data(good, previous={"basePrices": []}, now=now)
 
 
-@pytest.mark.parametrize("data", [
-    {},
-    {"basePrices": []},
-], ids=["missing", "empty"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {},
+        {"basePrices": []},
+    ],
+    ids=["missing", "empty"],
+)
 def test_rejects_data_without_prices(data):
     with pytest.raises(ValidationError, match="basePrices"):
         main.validate_data(data)
@@ -92,10 +100,8 @@ def test_rejects_data_without_prices(data):
 def test_infers_the_step_from_the_series():
     start = datetime.datetime(2025, 12, 1, tzinfo=UTC)
 
-    assert main.infer_step(series(start, 4, 15)) == datetime.timedelta(
-        minutes=15)
-    assert main.infer_step(series(start, 4, 60)) == datetime.timedelta(
-        minutes=60)
+    assert main.infer_step(series(start, 4, 15)) == datetime.timedelta(minutes=15)
+    assert main.infer_step(series(start, 4, 60)) == datetime.timedelta(minutes=60)
 
 
 def test_infers_the_smallest_step_from_a_sparse_series():
@@ -115,8 +121,7 @@ def test_end_of_finnish_day_follows_finnish_time_not_the_runners_clock():
 
     end = main.end_of_helsinki_day(now)
 
-    assert end.astimezone(UTC) == datetime.datetime(
-        2025, 12, 1, 22, 0, tzinfo=UTC)
+    assert end.astimezone(UTC) == datetime.datetime(2025, 12, 1, 22, 0, tzinfo=UTC)
 
 
 def test_end_of_finnish_day_handles_summer_time():
@@ -124,5 +129,4 @@ def test_end_of_finnish_day_handles_summer_time():
 
     end = main.end_of_helsinki_day(now)
 
-    assert end.astimezone(UTC) == datetime.datetime(
-        2025, 7, 1, 21, 0, tzinfo=UTC)
+    assert end.astimezone(UTC) == datetime.datetime(2025, 7, 1, 21, 0, tzinfo=UTC)

@@ -77,7 +77,9 @@ if (existing && !(existing[FIXTURE_FLAG] && isStale(existing))) {
   ]) {
     if (seeded[key]) seeded[key] = shift(seeded[key], offset);
   }
-  seeded.startTime = new Date(Date.parse(sample.startTime) + offset).toISOString();
+  seeded.startTime = new Date(
+    Date.parse(sample.startTime) + offset,
+  ).toISOString();
   seeded.endTime = new Date(Date.parse(sample.endTime) + offset).toISOString();
 
   await writeFile(target, JSON.stringify(seeded));

@@ -18,7 +18,8 @@ def config_file(monkeypatch, tmp_path):
     path = tmp_path / "config"
     path.write_text(
         '[entsoe]\nsecurity-token = "file-entsoe"\n\n'
-        '[fingrid]\nauthentication-token = "file-fingrid"\n')
+        '[fingrid]\nauthentication-token = "file-fingrid"\n'
+    )
     monkeypatch.setattr(main, "CONFIG_PATH", path)
     monkeypatch.delenv(main.ENTSOE_TOKEN_ENV, raising=False)
     monkeypatch.delenv(main.FINGRID_TOKEN_ENV, raising=False)
@@ -31,8 +32,7 @@ def test_reads_tokens_from_config_file(config_file):
     assert config.fingrid_authentication_token == "file-fingrid"
 
 
-def test_environment_takes_precedence_over_config_file(config_file,
-                                                       monkeypatch):
+def test_environment_takes_precedence_over_config_file(config_file, monkeypatch):
     monkeypatch.setenv(main.ENTSOE_TOKEN_ENV, "env-entsoe")
     monkeypatch.setenv(main.FINGRID_TOKEN_ENV, "env-fingrid")
 
@@ -77,8 +77,11 @@ def redaction_installed(monkeypatch):
     monkeypatch.setattr(main, "_SECRETS", [])
     original_factory = logging.getLogRecordFactory()
     main.install_log_redaction(
-        main.Config(entsoe_security_token="sekrit-entsoe",
-                    fingrid_authentication_token="sekrit-fingrid"))
+        main.Config(
+            entsoe_security_token="sekrit-entsoe",
+            fingrid_authentication_token="sekrit-fingrid",
+        )
+    )
     yield
     logging.setLogRecordFactory(original_factory)
 
@@ -86,7 +89,8 @@ def redaction_installed(monkeypatch):
 def test_redact_replaces_registered_secrets(redaction_installed):
     text = main.redact(
         "GET https://web-api.tp.entsoe.eu/api?securityToken=sekrit-entsoe "
-        "x-api-key: sekrit-fingrid")
+        "x-api-key: sekrit-fingrid"
+    )
 
     assert "sekrit-entsoe" not in text
     assert "sekrit-fingrid" not in text
@@ -94,7 +98,8 @@ def test_redact_replaces_registered_secrets(redaction_installed):
 
 
 def test_redaction_reaches_records_from_third_party_loggers(
-        redaction_installed, caplog):
+    redaction_installed, caplog
+):
     """The case this exists for, and the one a logger-level filter misses.
 
     urllib3 logs its retry warnings -- including the full request URL, and the
@@ -105,7 +110,9 @@ def test_redaction_reaches_records_from_third_party_loggers(
     with caplog.at_level(logging.WARNING):
         logging.getLogger("urllib3.connectionpool").warning(
             "Retrying after connection broken by %r: %s",
-            "err", "/api?securityToken=sekrit-entsoe")
+            "err",
+            "/api?securityToken=sekrit-entsoe",
+        )
 
     assert "sekrit-entsoe" not in caplog.text
     assert "<redacted>" in caplog.text
@@ -113,7 +120,6 @@ def test_redaction_reaches_records_from_third_party_loggers(
 
 def test_redaction_covers_deeply_nested_loggers(redaction_installed, caplog):
     with caplog.at_level(logging.ERROR):
-        logging.getLogger("a.b.c.d").error(
-            "token=sekrit-fingrid")
+        logging.getLogger("a.b.c.d").error("token=sekrit-fingrid")
 
     assert "sekrit-fingrid" not in caplog.text

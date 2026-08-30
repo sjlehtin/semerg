@@ -67,7 +67,12 @@ export function nearestIndexByTime(times, hoveredTime, maxGapMs = MAX_GAP_MS) {
  * step ahead of the rest. The visible effect is a tooltip whose readings drift
  * apart as you move right.
  */
-Interaction.modes.nearestByTime = function (chart, event, options, useFinalPosition) {
+Interaction.modes.nearestByTime = function (
+  chart,
+  event,
+  options,
+  useFinalPosition,
+) {
   const position = getRelativePosition(event, chart);
   const scale = chart.scales.x;
   const hoveredTime = scale.getValueForPixel(position.x);
@@ -77,11 +82,16 @@ Interaction.modes.nearestByTime = function (chart, event, options, useFinalPosit
     const times = meta.data.map((element) =>
       element.skip
         ? null
-        : scale.getValueForPixel(element.getProps(["x"], useFinalPosition).x));
+        : scale.getValueForPixel(element.getProps(["x"], useFinalPosition).x),
+    );
 
     const index = nearestIndexByTime(times, hoveredTime);
     if (index !== -1) {
-      items.push({ element: meta.data[index], datasetIndex: meta.index, index });
+      items.push({
+        element: meta.data[index],
+        datasetIndex: meta.index,
+        index,
+      });
     }
   }
 
@@ -266,7 +276,9 @@ export function createChart(canvas, data) {
         },
       },
       plugins: {
-        legend: { labels: { color: colours.axis, boxHeight: 2, usePointStyle: false } },
+        legend: {
+          labels: { color: colours.axis, boxHeight: 2, usePointStyle: false },
+        },
         tooltip: {
           callbacks: {
             title: (items) =>

@@ -110,9 +110,7 @@ function card(result) {
   } else {
     const start = window.start.setZone(ZONE);
     const today = DateTime.now().setZone(ZONE).hasSame(start, "day");
-    const when = today
-      ? start.toFormat("HH:mm")
-      : start.toFormat("ccc HH:mm");
+    const when = today ? start.toFormat("HH:mm") : start.toFormat("ccc HH:mm");
     const saving =
       result.startingNow || result.saving === null
         ? `<span style="color: var(--text-muted)">cheapest right now</span>`
@@ -147,7 +145,10 @@ function card(result) {
     const field = event.target.dataset.field;
     const value = Number(event.target.value);
     if (!Number.isFinite(value) || value <= 0) return;
-    settings = { ...settings, [task.id]: { ...settings[task.id], [field]: value } };
+    settings = {
+      ...settings,
+      [task.id]: { ...settings[task.id], [field]: value },
+    };
     saveSettings(settings);
     renderTasks();
   });
