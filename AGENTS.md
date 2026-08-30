@@ -73,8 +73,7 @@ point where a PR is one click away:
 
 1. Commit to a feature branch and push it.
 2. Write the description to `pr-description.md` in the repository root
-   (gitignored, one branch's worth at a time): what changed, why, and what a
-   reviewer should check. Keep it scannable.
+   (gitignored, one branch's worth at a time). See Conventions.
 3. Report the compare link, which opens the form prefilled:
    `https://github.com/sjlehtin/semerg/compare/main...<branch>?expand=1`
 
@@ -231,3 +230,7 @@ Two workflow rules that are easy to undo by accident:
 - **Keep commit messages short.** Subject line, and a body only where the diff
   genuinely does not speak for itself. State the current reason; skip the
   narrative of what was wrong before.
+- **PR descriptions explain what the diff cannot** — why a non-obvious choice
+  was made, what a reviewer should look at first, what changes for everyone
+  else once it merges. Not an inventory of the commits or a retelling of the
+  changes: both are already on the page.
