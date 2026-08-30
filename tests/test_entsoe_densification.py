@@ -8,13 +8,14 @@ being uniform, so these are the tests that make that guarantee real.
 """
 
 import datetime
+from itertools import pairwise
 
 import pytest
 
 from semerg import main
 from semerg.main import APIError, pull_entsoe_data
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 NS = "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:3"
 
@@ -71,7 +72,7 @@ def times(result):
 
 def gaps(result):
     stamps = times(result)
-    return {later - earlier for earlier, later in zip(stamps, stamps[1:])}
+    return {later - earlier for earlier, later in pairwise(stamps)}
 
 
 def test_fills_gaps_left_by_omitted_repeated_prices(fetch):
@@ -188,9 +189,8 @@ def test_non_200_raises_rather_than_returning_an_empty_dict(fetch):
 
 
 def test_error_response_does_not_leak_the_token(fetch, caplog):
-    with caplog.at_level("ERROR"):
-        with pytest.raises(APIError):
-            fetch(b"denied for token=token", status_code=401)
+    with caplog.at_level("ERROR"), pytest.raises(APIError):
+        fetch(b"denied for token=token", status_code=401)
 
     assert "token" not in caplog.text.replace("<redacted>", "")
 

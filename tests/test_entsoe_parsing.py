@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta
+from itertools import pairwise
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 pytest.register_assert_rewrite("semerg.main")
 
+from unittest.mock import Mock, patch
+
 from semerg.main import pull_entsoe_data
-from unittest.mock import patch, Mock
 
 TEST_DIR = Path(__file__).parent
 
@@ -51,7 +53,7 @@ def test_pull_entsoe_data(monkeypatch):
 
     start = datetime.fromisoformat(result.get("start"))
     end = datetime.fromisoformat(result.get("end"))
-    assert all([start <= datetime.fromisoformat(time) <= end for time in start_times])
+    assert all(start <= datetime.fromisoformat(time) <= end for time in start_times)
 
 
 def test_real_response_expands_to_a_uniform_grid(monkeypatch):
@@ -75,7 +77,7 @@ def test_real_response_expands_to_a_uniform_grid(monkeypatch):
         )
 
     stamps = [datetime.fromisoformat(p["startTime"]) for p in result["series"]]
-    gaps = {later - earlier for earlier, later in zip(stamps, stamps[1:])}
+    gaps = {later - earlier for earlier, later in pairwise(stamps)}
 
     assert gaps == {timedelta(minutes=15)}
     assert len(stamps) == 288

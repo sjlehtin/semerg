@@ -2,17 +2,20 @@ import datetime
 import json
 import logging
 import os
+import time
 import tomllib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import click
 import requests
-import time
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+
+logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path("~/.semerg/config")
 
@@ -102,22 +105,6 @@ def read_config():
     return Config(
         entsoe_security_token=entsoe_token, fingrid_authentication_token=fingrid_token
     )
-
-
-def redact(text, config):
-    """Strip API tokens out of text destined for a log.
-
-    The Entso-E token travels as a query parameter, so it turns up in any URL
-    that gets logged. This repository is public and its CI logs are world
-    readable, which makes that a credential leak rather than a cosmetic issue.
-    """
-    if not text:
-        return text
-    text = str(text)
-    for token in (config.entsoe_security_token, config.fingrid_authentication_token):
-        if token:
-            text = text.replace(token, "<redacted>")
-    return text
 
 
 def to_iso8601(cap):
@@ -236,7 +223,7 @@ def gather_data(include_overhead, date, delay, retries, output):
 
     start_time = datetime.datetime(
         year=dt.year, month=dt.month, day=dt.day, tzinfo=dt.tzinfo
-    ).astimezone(datetime.timezone.utc)
+    ).astimezone(datetime.UTC)
     start_time_stamp = to_iso8601(start_time)
 
     end_time = start_time + datetime.timedelta(days=2)
@@ -255,7 +242,7 @@ def gather_data(include_overhead, date, delay, retries, output):
     series = entsoe_data["series"]
 
     fetched_data = {
-        "fetchTime": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+        "fetchTime": datetime.datetime.now(tz=datetime.UTC).isoformat(),
         "startTime": start_time_stamp,
         "endTime": end_time_stamp,
         "priceResolutionMinutes": int(PRICE_RESOLUTION.total_seconds() // 60),
@@ -335,10 +322,10 @@ def parse_period(period):
     happens here.
     """
     interval_start = datetime.datetime.fromisoformat(
-        period.find("{*}timeInterval/{*}start").text.replace("Z", "+00:00")
+        period.find("{*}timeInterval/{*}start").text
     )
     interval_end = datetime.datetime.fromisoformat(
-        period.find("{*}timeInterval/{*}end").text.replace("Z", "+00:00")
+        period.find("{*}timeInterval/{*}end").text
     )
 
     received_resolution = period.find("{*}resolution").text
@@ -396,7 +383,7 @@ def pull_entsoe_data(
 
     if response.status_code != 200:
         register_secret(entsoe_security_token)
-        logging.error(
+        logger.error(
             f"Failed to fetch Entso-E data, code: {response.status_code}, "
             f"data: {redact(response.text)}"
         )
@@ -480,7 +467,7 @@ class ValidationError(Exception):
 def infer_step(points):
     """Smallest positive gap between consecutive points, as a timedelta."""
     gaps = []
-    for earlier, later in zip(points, points[1:]):
+    for earlier, later in pairwise(points):
         gap = datetime.datetime.fromisoformat(
             later["startTime"]
         ) - datetime.datetime.fromisoformat(earlier["startTime"])
@@ -502,7 +489,7 @@ def coverage_end(data):
 
 def end_of_helsinki_day(now=None):
     """Midnight at the end of the current Finnish day, as an aware datetime."""
-    now = (now or datetime.datetime.now(tz=datetime.timezone.utc)).astimezone(HELSINKI)
+    now = (now or datetime.datetime.now(tz=datetime.UTC)).astimezone(HELSINKI)
     tomorrow = now.date() + datetime.timedelta(days=1)
     return datetime.datetime.combine(tomorrow, datetime.time(0, 0), tzinfo=HELSINKI)
 

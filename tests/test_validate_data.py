@@ -5,7 +5,7 @@ import pytest
 from semerg import main
 from semerg.main import ValidationError
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 def series(start, count, step_minutes=15):
