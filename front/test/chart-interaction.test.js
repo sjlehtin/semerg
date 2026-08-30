@@ -43,8 +43,9 @@ describe("nearestIndexByTime", () => {
       // The array positions differ -- that is the whole problem --
       expect(priceIndex).not.toBe(productionIndex);
       // -- but the times they resolve to agree.
-      expect(Math.abs(prices[priceIndex] - production[productionIndex]))
-        .toBeLessThanOrEqual(15 * MINUTE);
+      expect(
+        Math.abs(prices[priceIndex] - production[productionIndex]),
+      ).toBeLessThanOrEqual(15 * MINUTE);
     }
   });
 
