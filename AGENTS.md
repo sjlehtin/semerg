@@ -117,6 +117,13 @@ world-readable — redact explicitly in every error, retry and debug path.
 | `basePrices` | `[{startTime, price}]` — **c/kWh, excluding VAT and all fees** |
 | `windProduction`, `windProductionForecast`, `solarProductionForecast` | `[{startTime, energy}]` — **MW** |
 
+**Every series is optional.** Entso-E and Fingrid fail independently and the
+page draws both, so an outage at either leaves its keys absent rather than
+aborting the run — `basePrices` included, together with the
+`priceResolutionMinutes` that describes it. Both sides handle a missing series:
+the frontend names the source that is down, and `merge-data` carries the
+published copy forward so a fetch that lost one source cannot blank it.
+
 Two things about this data that are easy to get wrong:
 
 - **ENTSO-E returns a sparse series.** It uses `curveType A03`, where a price
@@ -196,6 +203,15 @@ Invariants that are easy to break and expensive to debug:
 - **Never publish an unvalidated `data.json`.** `--output` truncates its target
   file on open, so a failed fetch leaves a partial file behind. The refresh
   workflow validates before uploading.
+- **Merge before validating against what is live.** `validate-data` refuses a
+  file that drops a series the published one has, because publishing it would
+  blank that series on the page. `merge-data` is what makes a fetch that lost a
+  source publishable, so the two steps belong together in that order.
+- **`check-coverage` runs after the upload, not before.** Prices that stop short
+  of the end of the Finnish day mean Entso-E is behind, and the run should go
+  red — but the production data in the same file is fresh. Gating the publish on
+  it spreads one source's outage across the whole page, which is the bug the
+  split exists to prevent.
 
 The AWS side is Terraform in `infra/`, applied by hand with an admin profile —
 the deploy role is scoped to S3 on one bucket and cannot create itself. Do not
