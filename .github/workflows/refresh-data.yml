@@ -101,6 +101,16 @@ jobs:
           if aws s3api head-object --bucket "$BUCKET" --key data.json \
                >/dev/null 2>head-err.txt; then
             aws s3 cp "s3://$BUCKET/data.json" published.json
+
+            # Entso-E and Fingrid fail independently, and the page draws both.
+            # A fetch that lost one source carries the other, so keep the
+            # published copy of what is missing rather than blanking a series
+            # the page is still showing. validate-data refuses a file that
+            # drops a published series, so this is not optional.
+            semerg merge-data data.json --previous published.json \
+              --output merged.json
+            mv merged.json data.json
+
             semerg validate-data data.json --compare-to published.json
           elif grep -qE '(404|Not Found)' head-err.txt; then
             echo "Nothing published yet; validating on its own."
@@ -118,3 +128,11 @@ jobs:
           set -euo pipefail
           aws s3 cp data.json "s3://$BUCKET/data.json" \
             --cache-control "public, max-age=60, stale-if-error=86400"
+
+      # An alarm, not a gate, which is why it runs after the upload: prices
+      # that stop short of the end of the Finnish day mean Entso-E is behind
+      # and the run should go red, but the production data published above is
+      # fresh and holding it back would spread one source's outage across the
+      # whole page.
+      - name: Check price coverage
+        run: semerg check-coverage data.json

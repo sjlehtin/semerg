@@ -296,6 +296,12 @@ on it.
   running at all", which is exactly what the auto-disable produces. The page
   shows its own `fetchTime`, so a stale page is visible to anyone looking at
   it, but nothing pages you.
+- **A failed run does not mean nothing was published.** Entso-E and Fingrid
+  fail independently, and the refresh publishes whatever arrived: the missing
+  series are carried forward from the published file, and the run then goes red
+  at the `check-coverage` step if the prices no longer reach the end of the
+  Finnish day. So a red *Refresh data* with fresh production data on the page
+  is the expected shape of an Entso-E outage, not a contradiction.
 
 ## Verifying the setup
 
@@ -314,7 +320,11 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<new-host>/
 Then confirm the guards actually hold:
 
 1. **Bad token.** Re-run with a deliberately wrong `SEMERG_ENTSOE_TOKEN` and
-   confirm the run fails *and* that `data.json` in the bucket is unchanged.
+   confirm the run fails at `check-coverage` — and that the `basePrices` in the
+   bucket are unchanged, carried forward rather than blanked. The production
+   series in the same file *are* expected to update: an outage at one source
+   must not stop the other. With both tokens wrong the run fails before
+   uploading anything, and `data.json` is untouched.
 2. **Bucket isolation.** With the workflow's role, attempt a write to the old
    bucket and confirm it is denied.
 3. **Deploy leaves data alone.** Run `deploy-site` and confirm `data.json`'s

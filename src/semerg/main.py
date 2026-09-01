@@ -236,30 +236,42 @@ def gather_data(include_overhead, date, delay, retries, output):
 
     entsoe_security_token = config.entsoe_security_token
 
-    entsoe_data = pull_entsoe_data(
-        entsoe_security_token, start_time, end_time, session=session
-    )
-    series = entsoe_data["series"]
+    try:
+        series = pull_entsoe_data(
+            entsoe_security_token, start_time, end_time, session=session
+        )["series"]
+    except APIError as e:
+        # Entso-E outages are tolerated the same way Fingrid's are. The two
+        # sources fail independently, and the production series stand on their
+        # own, so publish what we have rather than nothing. The price keys are
+        # simply absent; the frontend says so, and the publish step carries
+        # forward the prices that are already live.
+        click.echo(f"Warning: no price data. {e}")
+        series = []
 
     fetched_data = {
         "fetchTime": datetime.datetime.now(tz=datetime.UTC).isoformat(),
         "startTime": start_time_stamp,
         "endTime": end_time_stamp,
-        "priceResolutionMinutes": int(PRICE_RESOLUTION.total_seconds() // 60),
-        "basePrices": series,
     }
+    if series:
+        fetched_data["priceResolutionMinutes"] = int(
+            PRICE_RESOLUTION.total_seconds() // 60
+        )
+        fetched_data["basePrices"] = series
 
-    # Entsoe-E might return more than we asked, let's enrich the data with
-    # production data up until that point.
-    start_time_stamp = series[0]["startTime"]
+    # Entso-E might return more than we asked for, so production data is
+    # re-based on the first price point to match. With no prices there is
+    # nothing to match, and the requested window stands.
+    production_start = series[0]["startTime"] if series else start_time_stamp
     click.echo(
-        f"Fetching production data from Fingrid between {start_time_stamp} and "
+        f"Fetching production data from Fingrid between {production_start} and "
         f"{end_time_stamp}"
     )
 
     try:
         wind_production, wind_production_times = get_production_data(
-            config, 75, start_time_stamp, end_time_stamp, session=session
+            config, 75, production_start, end_time_stamp, session=session
         )
 
         fetched_data["windProduction"] = [
@@ -271,7 +283,7 @@ def gather_data(include_overhead, date, delay, retries, output):
             time.sleep(delay)
 
         wind_production_forecast, wind_production_forecast_times = get_production_data(
-            config, 245, start_time_stamp, end_time_stamp, session=session
+            config, 245, production_start, end_time_stamp, session=session
         )
 
         fetched_data["windProductionForecast"] = [
@@ -284,7 +296,7 @@ def gather_data(include_overhead, date, delay, retries, output):
 
         solar_production_forecast, solar_production_forecast_times = (
             get_production_data(
-                config, 247, start_time_stamp, end_time_stamp, session=session
+                config, 247, production_start, end_time_stamp, session=session
             )
         )
 
@@ -295,9 +307,9 @@ def gather_data(include_overhead, date, delay, retries, output):
             )
         ]
     except APIError as e:
-        # Fingrid outages are tolerated: prices are the point of this tool and
-        # the page renders without production data. The keys are simply absent,
-        # which the frontend must handle.
+        # Fingrid outages are tolerated the same way: the page renders without
+        # production data. The keys are simply absent, which the frontend
+        # handles and the publish step fills in from what is already live.
         click.echo(f"Warning: no production data. {e}")
 
     if output:
@@ -379,7 +391,13 @@ def pull_entsoe_data(
         f"Fetching pricing data from Entso-E between {start_time} and {end_time}"
     )
     getter = session.get if session is not None else requests.get
-    response = getter("https://web-api.tp.entsoe.eu/api", params=params)
+    try:
+        response = getter("https://web-api.tp.entsoe.eu/api", params=params)
+    except requests.RequestException as e:
+        # The token rides in the query string, so it is in the URL that
+        # requests puts in its exception message.
+        register_secret(entsoe_security_token)
+        raise APIError(f"Failed to reach Entso-E: {redact(e)}") from e
 
     if response.status_code != 200:
         register_secret(entsoe_security_token)
@@ -393,7 +411,10 @@ def pull_entsoe_data(
     series_end_time = None
 
     xml_data = response.content.decode("utf-8", "replace")
-    root = ET.fromstring(xml_data)
+    try:
+        root = ET.fromstring(xml_data)
+    except ET.ParseError as e:
+        raise APIError(f"Entso-E returned a body that is not XML: {e}") from e
 
     prices = {}
     for period in root.findall("./{*}TimeSeries/{*}Period"):
@@ -442,16 +463,24 @@ def get_production_data(config, dataset_id, start_time, end_time, session=None):
         "sortOrder": "asc",
     }
     getter = session.get if session is not None else requests.get
-    response = getter(
-        f"https://data.fingrid.fi/api/datasets/{dataset_id}/data",
-        headers=headers,
-        params=params,
-    )
+    try:
+        response = getter(
+            f"https://data.fingrid.fi/api/datasets/{dataset_id}/data",
+            headers=headers,
+            params=params,
+        )
+    except requests.RequestException as e:
+        raise APIError(f"Failed to reach Fingrid for dataset {dataset_id}: {e}") from e
     if response.status_code != 200:
         raise APIError(
             f"Failed to get data from endpoint for dataset {dataset_id}, status {response.status_code}: {response.text} "
         )
-    production_raw_data = json.loads(response.content)
+    try:
+        production_raw_data = json.loads(response.content)
+    except json.JSONDecodeError as e:
+        raise APIError(
+            f"Fingrid returned a body that is not JSON for dataset {dataset_id}: {e}"
+        ) from e
     production_times = [
         datetime.datetime.fromisoformat(val["startTime"])
         for val in production_raw_data["data"]
@@ -494,13 +523,89 @@ def end_of_helsinki_day(now=None):
     return datetime.datetime.combine(tomorrow, datetime.time(0, 0), tzinfo=HELSINKI)
 
 
-def validate_data(data, previous=None, now=None):
+PRODUCTION_KEYS = (
+    "windProduction",
+    "windProductionForecast",
+    "solarProductionForecast",
+)
+
+# Everything a fetch can be missing because a source was down, and that the
+# already published file can therefore supply. `priceResolutionMinutes`
+# describes `basePrices`, so it travels with it.
+SERIES_KEYS = ("basePrices", *PRODUCTION_KEYS)
+CARRIED_FORWARD_KEYS = ("priceResolutionMinutes", *SERIES_KEYS)
+
+
+def merge_data(data, previous):
+    """Fill series a fresh fetch is missing from the previously published data.
+
+    Entso-E and Fingrid fail independently, and the page draws both. Publishing
+    a fetch that lost one source as it stands would blank a series that is still
+    perfectly good on the page, so what is already live is carried forward
+    instead. Carried-forward prices are stale rather than wrong -- they are the
+    same points the page is already showing -- and `check_price_coverage` is
+    what says so out loud.
+    """
+    merged = dict(data)
+    for key in CARRIED_FORWARD_KEYS:
+        if not merged.get(key) and previous.get(key):
+            merged[key] = previous[key]
+    return merged
+
+
+def validate_data(data, previous=None):
     """Raise ValidationError unless this data is fit to publish.
+
+    Fit to publish means it carries something worth showing and takes nothing
+    away from what is already published. How far ahead the prices reach is a
+    separate question, asked by `check_price_coverage`, because the answer must
+    not gate a publish: during an Entso-E outage the prices stand still while
+    the production series keep arriving, and holding those back would spread one
+    source's outage across the whole page.
+    """
+    prices = data.get("basePrices") or []
+    if not prices and not any(data.get(key) for key in PRODUCTION_KEYS):
+        raise ValidationError(
+            "Neither prices nor production data: there is nothing here to publish."
+        )
+
+    end = coverage_end(data) if prices else None
+
+    if previous is not None:
+        dropped = [
+            key for key in SERIES_KEYS if previous.get(key) and not data.get(key)
+        ]
+        if dropped:
+            raise ValidationError(
+                f"{', '.join(dropped)} is published but missing here. Refusing "
+                f"to take a live series off the page; carry it forward with "
+                f"merge-data first."
+            )
+
+        if prices:
+            try:
+                previous_end = coverage_end(previous)
+            except ValidationError:
+                previous_end = None
+            if previous_end is not None and end < previous_end:
+                raise ValidationError(
+                    f"Prices cover up to {end}, which is less than the "
+                    f"{previous_end} already published. Refusing to regress."
+                )
+
+    return end
+
+
+def check_price_coverage(data, now=None):
+    """Raise ValidationError unless prices reach the end of the Finnish day.
 
     Deliberately does *not* check for a fixed number of hours of remaining
     coverage. Entso-E publishes on CET day boundaries and Nord Pool releases the
     next day around midday, so any fixed horizon is violated once every day just
     before publication -- which would train everyone to ignore the alert.
+
+    An alarm, not a gate: prices that stop short are still the prices the page
+    has, so this is asked after publishing rather than before.
     """
     end = coverage_end(data)
 
@@ -511,18 +616,56 @@ def validate_data(data, previous=None, now=None):
             f"short of the end of the current Finnish day ({required})."
         )
 
-    if previous is not None:
-        try:
-            previous_end = coverage_end(previous)
-        except ValidationError:
-            previous_end = None
-        if previous_end is not None and end < previous_end:
-            raise ValidationError(
-                f"Prices cover up to {end}, which is less than the "
-                f"{previous_end} already published. Refusing to regress."
-            )
-
     return end
+
+
+def load_json(fp):
+    try:
+        return json.load(fp)
+    except json.JSONDecodeError as e:
+        raise click.ClickException(f"{fp.name} is not valid JSON: {e}")
+
+
+@cli.command("merge-data")
+@click.option(
+    "--previous",
+    type=click.File("r"),
+    required=True,
+    metavar="FILE",
+    help="Take series the new data is missing from FILE, the currently published data",
+)
+@click.option("--output", type=click.File("w"), required=True)
+@click.argument("path", type=click.File("r"))
+def merge_data_command(path, previous, output):
+    """Carry published series forward into a fetch that is missing them.
+
+    A source that was down leaves its keys absent. Publishing that file as it
+    stands would take a working series off the page, so run this before
+    validating against what is live -- validate-data refuses a file that drops
+    a published series.
+    """
+    data = load_json(path)
+
+    try:
+        published = json.load(previous)
+    except json.JSONDecodeError:
+        # A corrupt published file is nothing to carry forward from, and no
+        # reason to block a good fetch.
+        click.echo(f"Ignoring {previous.name}: not valid JSON.")
+        published = {}
+
+    merged = merge_data(data, published)
+
+    carried = [
+        key for key in CARRIED_FORWARD_KEYS if not data.get(key) and merged.get(key)
+    ]
+    click.echo(
+        f"Carried forward from {previous.name}: {', '.join(carried)}."
+        if carried
+        else "Nothing to carry forward."
+    )
+
+    json.dump(merged, output)
 
 
 @cli.command("validate-data")
@@ -530,8 +673,8 @@ def validate_data(data, previous=None, now=None):
     "--compare-to",
     type=click.File("r"),
     metavar="FILE",
-    help="Refuse to publish if FILE (the currently published data) "
-    "covers a longer period than the new data",
+    help="Refuse to publish if FILE (the currently published data) has series "
+    "the new data lacks, or prices covering a longer period",
 )
 @click.argument("path", type=click.File("r"))
 def validate_data_command(path, compare_to):
@@ -541,10 +684,7 @@ def validate_data_command(path, compare_to):
     data. `gather-data --output` truncates its target file as soon as it opens
     it, so a failed run leaves a partial file behind that looks plausible.
     """
-    try:
-        data = json.load(path)
-    except json.JSONDecodeError as e:
-        raise click.ClickException(f"{path.name} is not valid JSON: {e}")
+    data = load_json(path)
 
     previous = None
     if compare_to:
@@ -559,21 +699,36 @@ def validate_data_command(path, compare_to):
     except ValidationError as e:
         raise click.ClickException(str(e))
 
-    missing = [
-        key
-        for key in (
-            "windProduction",
-            "windProductionForecast",
-            "solarProductionForecast",
-        )
-        if key not in data
-    ]
+    missing = [key for key in PRODUCTION_KEYS if not data.get(key)]
     if missing:
         # Fingrid failures are tolerated by design; the page renders without
         # them. Worth reporting, not worth blocking a price update for.
         click.echo(f"Warning: no production data for {', '.join(missing)}.")
 
-    click.echo(
-        f"OK: {len(data['basePrices'])} price points, covering up to "
-        f"{end.astimezone(HELSINKI)}."
-    )
+    if end is None:
+        # Likewise an Entso-E failure. check-coverage is what raises the alarm.
+        click.echo("OK: production data only, no prices.")
+    else:
+        click.echo(
+            f"OK: {len(data['basePrices'])} price points, covering up to "
+            f"{end.astimezone(HELSINKI)}."
+        )
+
+
+@cli.command("check-coverage")
+@click.argument("path", type=click.File("r"))
+def check_coverage_command(path):
+    """Check that the prices in a data file reach far enough ahead.
+
+    Exits non-zero when they do not. Run this *after* publishing: prices that
+    stop short mean Entso-E is behind, which is worth a failed run, but the
+    production data in the same file is fresh and must not be held back for it.
+    """
+    data = load_json(path)
+
+    try:
+        end = check_price_coverage(data)
+    except ValidationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo(f"OK: prices cover up to {end.astimezone(HELSINKI)}.")

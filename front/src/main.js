@@ -52,6 +52,8 @@ function renderHeader(data) {
       last > endOfToday
         ? `Prices through ${last.toFormat("cccc HH:mm")}`
         : `Prices through ${last.toFormat("HH:mm")} — tomorrow's are published around 14:00`;
+  } else {
+    el("coverage").textContent = "Prices unavailable";
   }
 
   const missing = [
@@ -59,14 +61,26 @@ function renderHeader(data) {
     ["windProductionForecast", "wind forecast"],
     ["solarProductionForecast", "solar forecast"],
   ]
-    .filter(([key]) => !data[key])
+    .filter(([key]) => !data[key]?.length)
     .map(([, label]) => label);
 
-  showError(
-    missing.length
-      ? `Fingrid data unavailable (${missing.join(", ")}). Prices are unaffected.`
-      : "",
-  );
+  // The two sources fail independently and the page keeps drawing whatever
+  // still arrived, so say which one is missing rather than blaming the page.
+  const notices = [];
+  if (!prices.length) {
+    notices.push("Price data unavailable (Entso-E).");
+  }
+  if (missing.length) {
+    notices.push(`Fingrid data unavailable (${missing.join(", ")}).`);
+  }
+  if (notices.length === 1) {
+    notices.push(
+      prices.length
+        ? "Prices are unaffected."
+        : "Production data is unaffected.",
+    );
+  }
+  showError(notices.join(" "));
 }
 
 function renderTariffNote() {

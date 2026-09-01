@@ -21,8 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   falling back to `~/.semerg/config` as before. Each token is looked up
   independently.
 - `semerg validate-data`, which checks a gathered file is fit to publish. It
-  requires prices reaching the end of the current Finnish day and refuses a
-  series shorter than one already published.
+  requires something worth publishing and refuses a file that drops a series,
+  or shortens the prices, against what is already published.
+- `semerg merge-data`, which carries the published series forward into a fetch
+  that is missing them, and `semerg check-coverage`, which reports whether the
+  prices reach the end of the current Finnish day.
 - `--retries` option, backing off on rate limits and server errors.
 - Deploy from GitHub Actions to S3, documented in `docs/deployment.md`.
 - Terraform for the AWS side — bucket, CloudFront distribution and the
@@ -44,6 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An Entso-E outage no longer takes the wind and solar series off the page.
+  Prices and production come from two sources that fail independently, but a
+  failed price fetch aborted the whole run, so nothing was published at all.
+  Each source is now tolerated on its own: the fetch keeps whatever arrived,
+  the publish step carries forward the series that did not, and the page names
+  the source that is missing. Transport failures and unparseable bodies count
+  as outages too, rather than escaping as a traceback.
+- Whether the prices reach the end of the Finnish day is now checked after
+  publishing rather than before. It is an alarm, not a gate: during an Entso-E
+  outage the prices stand still while the production data keeps arriving, and
+  blocking the publish held back fresh data over a stale series.
 - Failing to fetch prices from Entso-E now raises rather than returning an
   empty result, which the caller then died on with a `KeyError`. An empty
   series and an unsupported resolution likewise raise instead of producing a
