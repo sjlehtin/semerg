@@ -160,6 +160,41 @@ def test_carries_forward_the_series_a_fetch_is_missing():
     assert main.validate_data(merged, previous=published)
 
 
+def test_carrying_a_series_forward_says_so():
+    published = data_covering_until(
+        main.end_of_helsinki_day(datetime.datetime(2025, 12, 1, 10, 0, tzinfo=UTC))
+    )
+    fresh = {
+        "windProduction": production(4),
+        "notices": [
+            {"series": "basePrices", "state": "missing", "detail": "Entso-E: 503"}
+        ],
+    }
+
+    merged = main.merge_data(fresh, published)
+
+    # The reason survives; what changes is that the series is now stale rather
+    # than absent, which is what the page has to explain.
+    assert merged["notices"] == [
+        {
+            "series": "basePrices",
+            "state": "carriedForward",
+            "detail": "Entso-E: 503",
+        }
+    ]
+
+
+def test_a_series_carried_forward_without_a_reason_still_says_it_is_held():
+    """An older gather, or one whose notice never reached the file."""
+    published = data_covering_until(
+        main.end_of_helsinki_day(datetime.datetime(2025, 12, 1, 10, 0, tzinfo=UTC))
+    )
+
+    merged = main.merge_data({"windProduction": production(4)}, published)
+
+    assert merged["notices"] == [{"series": "basePrices", "state": "carriedForward"}]
+
+
 def test_merging_leaves_a_complete_fetch_untouched():
     now = datetime.datetime(2025, 12, 1, 10, 0, tzinfo=UTC)
     published = data_covering_until(main.end_of_helsinki_day(now))

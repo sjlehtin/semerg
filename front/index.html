@@ -39,6 +39,29 @@
       ></div>
 
       <section class="card mb-6 p-3 sm:p-4">
+        <div id="source-status" hidden class="mb-3">
+          <button
+            id="source-status-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="source-status-details"
+            class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium"
+            style="background: var(--warning-surface); color: var(--warning)"
+          >
+            <span aria-hidden="true">⚠</span>
+            <span id="source-status-summary" class="flex-1"></span>
+            <span
+              id="source-status-hint"
+              class="text-xs font-normal underline underline-offset-2"
+            ></span>
+          </button>
+          <div
+            id="source-status-details"
+            hidden
+            class="mt-2 space-y-3 px-3 text-sm"
+            style="color: var(--text-muted)"
+          ></div>
+        </div>
         <div class="h-[22rem] sm:h-[30rem]">
           <canvas id="energy"></canvas>
         </div>

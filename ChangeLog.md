@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A warning by the chart when a source is behind, naming the series affected
+  and opening on click or tap to show why — the API error the fetch saw, and
+  whether the data is missing or being held over from an earlier update.
+  `data.json` grows an optional `notices` field to carry those reasons.
+
 - Cheapest-time-to-run recommendations for common household loads: dishwasher,
   washing machine, sauna and EV charging at 11 kW. Each shows when to start,
   what it costs, and what waiting saves against starting now. Durations (and

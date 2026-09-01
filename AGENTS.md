@@ -116,6 +116,7 @@ world-readable — redact explicitly in every error, retry and debug path.
 | `priceResolutionMinutes` | grid spacing of `basePrices` |
 | `basePrices` | `[{startTime, price}]` — **c/kWh, excluding VAT and all fees** |
 | `windProduction`, `windProductionForecast`, `solarProductionForecast` | `[{startTime, energy}]` — **MW** |
+| `notices` | `[{series, state, detail}]` — optional; why a series is absent or stale |
 
 **Every series is optional.** Entso-E and Fingrid fail independently and the
 page draws both, so an outage at either leaves its keys absent rather than
@@ -123,6 +124,14 @@ aborting the run — `basePrices` included, together with the
 `priceResolutionMinutes` that describes it. Both sides handle a missing series:
 the frontend names the source that is down, and `merge-data` carries the
 published copy forward so a fetch that lost one source cannot blank it.
+
+`notices` is how the page explains that. `gather-data` records the API error
+behind each series it could not fetch (`state: "missing"`), and `merge-data`
+turns that into `state: "carriedForward"` for the series it filled in from the
+published file. **It carries no timestamp for when a series was last fetched**,
+deliberately: the published file records only when it was *written*, which
+during an outage is a fresh time attached to old data. The page reads the age
+off the last point of the series instead, which cannot lie.
 
 Two things about this data that are easy to get wrong:
 
