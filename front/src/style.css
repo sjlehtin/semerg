@@ -25,6 +25,8 @@
   --series-solar: #d19a0f;
 
   --now-line: #e0466b;
+  --warning: #8a5300;
+  --warning-surface: rgb(209 154 15 / 0.16);
   --window-fill: rgb(47 163 12 / 0.16);
   --window-border: #2fa30c;
 }
@@ -47,6 +49,8 @@
     --series-solar: #f0c245;
 
     --now-line: #ff6d8c;
+    --warning: #f0c245;
+    --warning-surface: rgb(240 194 69 / 0.14);
     --window-fill: rgb(94 222 47 / 0.18);
     --window-border: #5ede2f;
   }

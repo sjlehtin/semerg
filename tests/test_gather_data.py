@@ -64,6 +64,53 @@ def test_an_entsoe_outage_leaves_the_production_data_intact(tokens, tmp_path):
     assert all(start == data["startTime"] for _, start in calls)
 
 
+def test_the_reason_a_series_is_absent_is_recorded_for_the_page(tokens, tmp_path):
+    """A missing key alone does not tell the reader why it is missing."""
+    with (
+        patch.object(main, "pull_entsoe_data", side_effect=APIError("Entso-E: 503")),
+        patch.object(main, "get_production_data", recording_production([])),
+    ):
+        result, output = gather(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    notices = json.loads(output.read_text())["notices"]
+
+    assert notices == [
+        {"series": "basePrices", "state": "missing", "detail": "Entso-E: 503"}
+    ]
+
+
+def test_a_fingrid_failure_is_recorded_for_every_series_it_lost(tokens, tmp_path):
+    def one_dataset_then_failure(
+        config, dataset_id, start_time, end_time, session=None
+    ):
+        if dataset_id != 75:
+            raise APIError("Fingrid: 429")
+        return [100.0], [datetime.datetime(2025, 12, 1, tzinfo=UTC)]
+
+    with (
+        patch.object(
+            main,
+            "pull_entsoe_data",
+            return_value={
+                "series": [{"startTime": "2025-12-01T00:00:00+00:00", "price": 5.0}]
+            },
+        ),
+        patch.object(main, "get_production_data", one_dataset_then_failure),
+    ):
+        result, output = gather(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(output.read_text())
+
+    # The series that did arrive is not reported as missing.
+    assert data["windProduction"]
+    assert [notice["series"] for notice in data["notices"]] == [
+        "windProductionForecast",
+        "solarProductionForecast",
+    ]
+
+
 def test_production_data_is_rebased_on_the_first_price_point(tokens, tmp_path):
     calls = []
     first = "2025-11-30T22:00:00+00:00"
@@ -79,7 +126,9 @@ def test_production_data_is_rebased_on_the_first_price_point(tokens, tmp_path):
         result, output = gather(tmp_path)
 
     assert result.exit_code == 0, result.output
-    assert json.loads(output.read_text())["priceResolutionMinutes"] == 15
+    data = json.loads(output.read_text())
+    assert data["priceResolutionMinutes"] == 15
+    assert "notices" not in data
     assert all(start == first for _, start in calls)
 
 

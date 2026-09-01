@@ -33,6 +33,18 @@ HELSINKI = ZoneInfo("Europe/Helsinki")
 # and the rest of the system may rely on that.
 PRICE_RESOLUTION = datetime.timedelta(minutes=15)
 
+PRODUCTION_KEYS = (
+    "windProduction",
+    "windProductionForecast",
+    "solarProductionForecast",
+)
+
+# Everything a fetch can be missing because a source was down, and that the
+# already published file can therefore supply. `priceResolutionMinutes`
+# describes `basePrices`, so it travels with it.
+SERIES_KEYS = ("basePrices", *PRODUCTION_KEYS)
+CARRIED_FORWARD_KEYS = ("priceResolutionMinutes", *SERIES_KEYS)
+
 
 class SemergGroup(click.Group):
     """Turn our own exceptions into clean CLI errors.
@@ -236,6 +248,12 @@ def gather_data(include_overhead, date, delay, retries, output):
 
     entsoe_security_token = config.entsoe_security_token
 
+    # What the page shows the reader when a series is not there. The failure is
+    # visible here and nowhere else: by the time the file is drawn, a missing
+    # series is just an absent key, and a carried-forward one looks like
+    # ordinary data.
+    notices = []
+
     try:
         series = pull_entsoe_data(
             entsoe_security_token, start_time, end_time, session=session
@@ -248,6 +266,7 @@ def gather_data(include_overhead, date, delay, retries, output):
         # forward the prices that are already live.
         click.echo(f"Warning: no price data. {e}")
         series = []
+        notices.append({"series": "basePrices", "state": "missing", "detail": str(e)})
 
     fetched_data = {
         "fetchTime": datetime.datetime.now(tz=datetime.UTC).isoformat(),
@@ -311,6 +330,14 @@ def gather_data(include_overhead, date, delay, retries, output):
         # production data. The keys are simply absent, which the frontend
         # handles and the publish step fills in from what is already live.
         click.echo(f"Warning: no production data. {e}")
+        notices.extend(
+            {"series": key, "state": "missing", "detail": str(e)}
+            for key in PRODUCTION_KEYS
+            if key not in fetched_data
+        )
+
+    if notices:
+        fetched_data["notices"] = notices
 
     if output:
         json.dump(fetched_data, output)
@@ -523,17 +550,12 @@ def end_of_helsinki_day(now=None):
     return datetime.datetime.combine(tomorrow, datetime.time(0, 0), tzinfo=HELSINKI)
 
 
-PRODUCTION_KEYS = (
-    "windProduction",
-    "windProductionForecast",
-    "solarProductionForecast",
-)
-
-# Everything a fetch can be missing because a source was down, and that the
-# already published file can therefore supply. `priceResolutionMinutes`
-# describes `basePrices`, so it travels with it.
-SERIES_KEYS = ("basePrices", *PRODUCTION_KEYS)
-CARRIED_FORWARD_KEYS = ("priceResolutionMinutes", *SERIES_KEYS)
+def find_notice(notices, series):
+    """The notice about `series`, or None."""
+    for notice in notices:
+        if notice.get("series") == series:
+            return notice
+    return None
 
 
 def merge_data(data, previous):
@@ -547,9 +569,28 @@ def merge_data(data, previous):
     what says so out loud.
     """
     merged = dict(data)
+    carried = []
     for key in CARRIED_FORWARD_KEYS:
         if not merged.get(key) and previous.get(key):
             merged[key] = previous[key]
+            carried.append(key)
+
+    notices = [dict(notice) for notice in merged.get("notices", ())]
+    for key in carried:
+        if key not in SERIES_KEYS:
+            continue
+        notice = find_notice(notices, key)
+        if notice is None:
+            notice = {"series": key, "state": "missing"}
+            notices.append(notice)
+        # Deliberately no timestamp for when the series was last fetched. The
+        # published file records only when the *file* was written, which during
+        # an outage is a fresh time attached to old data -- and the page can see
+        # the real answer for itself in the last point of the series.
+        notice["state"] = "carriedForward"
+
+    if notices:
+        merged["notices"] = notices
     return merged
 
 

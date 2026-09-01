@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 
 import { createChart } from "./chart.js";
 import { recommend, toSlots } from "./schedule.js";
+import { sourceStatus } from "./status.js";
 import { durationOf, loadSettings, saveSettings, tasks } from "./tasks.js";
 import { supplier, transmission, VAT_RATE, ZONE } from "./tariff.js";
 
@@ -23,6 +24,7 @@ let view = null;
 let latest = null;
 let settings = loadSettings();
 let selected = null;
+let statusOpen = false;
 
 async function fetchData() {
   // Absolute path: a relative one resolves against the document path and
@@ -45,42 +47,66 @@ function renderHeader(data) {
   el("updated").textContent = `Updated ${fetched.toFormat("ccc d LLL, HH:mm")}`;
 
   const prices = data.basePrices ?? [];
-  if (prices.length) {
-    const last = DateTime.fromISO(prices.at(-1).startTime).setZone(ZONE);
-    const endOfToday = DateTime.now().setZone(ZONE).endOf("day");
+  const now = DateTime.now().setZone(ZONE);
+  const last = prices.length
+    ? DateTime.fromISO(prices.at(-1).startTime).setZone(ZONE)
+    : null;
+
+  if (!last) {
+    el("coverage").textContent = "Prices unavailable";
+  } else if (last < now) {
+    // Prices that stop in the past are not a normal morning, so do not offer
+    // the usual reassurance about tomorrow's publication.
     el("coverage").textContent =
-      last > endOfToday
+      `Prices ran out ${last.toFormat("ccc d LLL, HH:mm")}`;
+  } else {
+    el("coverage").textContent =
+      last > now.endOf("day")
         ? `Prices through ${last.toFormat("cccc HH:mm")}`
         : `Prices through ${last.toFormat("HH:mm")} — tomorrow's are published around 14:00`;
-  } else {
-    el("coverage").textContent = "Prices unavailable";
+  }
+}
+
+/**
+ * The warning by the chart, and the reasons behind it.
+ *
+ * Built as nodes rather than markup: the reasons include an upstream error
+ * message, which is not ours to trust with innerHTML.
+ */
+function renderStatus(data) {
+  const status = sourceStatus(data);
+  el("source-status").hidden = !status;
+  if (!status) {
+    statusOpen = false;
+    return;
   }
 
-  const missing = [
-    ["windProduction", "wind production"],
-    ["windProductionForecast", "wind forecast"],
-    ["solarProductionForecast", "solar forecast"],
-  ]
-    .filter(([key]) => !data[key]?.length)
-    .map(([, label]) => label);
+  el("source-status-summary").textContent = status.summary;
 
-  // The two sources fail independently and the page keeps drawing whatever
-  // still arrived, so say which one is missing rather than blaming the page.
-  const notices = [];
-  if (!prices.length) {
-    notices.push("Price data unavailable (Entso-E).");
-  }
-  if (missing.length) {
-    notices.push(`Fingrid data unavailable (${missing.join(", ")}).`);
-  }
-  if (notices.length === 1) {
-    notices.push(
-      prices.length
-        ? "Prices are unaffected."
-        : "Production data is unaffected.",
-    );
-  }
-  showError(notices.join(" "));
+  const details = el("source-status-details");
+  details.replaceChildren(
+    ...status.items.map((item) => {
+      const node = document.createElement("div");
+
+      const title = document.createElement("p");
+      title.className = "font-medium";
+      title.style.color = "var(--text)";
+      title.textContent = item.title;
+      node.append(title);
+
+      for (const line of item.lines) {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = line;
+        node.append(paragraph);
+      }
+
+      return node;
+    }),
+  );
+
+  details.hidden = !statusOpen;
+  el("source-status-toggle").setAttribute("aria-expanded", String(statusOpen));
+  el("source-status-hint").textContent = statusOpen ? "Hide" : "Why?";
 }
 
 function renderTariffNote() {
@@ -206,6 +232,7 @@ async function refresh() {
   try {
     latest = await fetchData();
     renderHeader(latest);
+    renderStatus(latest);
     if (view) {
       view.update(latest);
     } else {
@@ -223,6 +250,11 @@ function start() {
   el("clear-highlight").addEventListener("click", () => {
     selected = null;
     renderTasks();
+  });
+
+  el("source-status-toggle").addEventListener("click", () => {
+    statusOpen = !statusOpen;
+    if (latest) renderStatus(latest);
   });
 
   window
