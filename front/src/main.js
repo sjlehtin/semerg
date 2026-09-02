@@ -100,6 +100,16 @@ function renderStatus(data) {
         node.append(paragraph);
       }
 
+      if (item.link) {
+        const link = document.createElement("a");
+        link.className = "underline underline-offset-2";
+        link.href = item.link.href;
+        link.textContent = item.link.text;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        node.append(link);
+      }
+
       return node;
     }),
   );
