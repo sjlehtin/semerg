@@ -20,6 +20,16 @@ import { ZONE } from "./tariff.js";
  */
 const MEASUREMENT_GRACE_HOURS = 2;
 
+/**
+ * Where a source announces its own outages.
+ *
+ * Linked rather than fetched and summarised. It is the platform's whole news
+ * feed, not an incident feed, so deciding which entries are relevant is real
+ * design work -- and the feed lives on the platform that is down, so it cannot
+ * be relied on at the moment it would be quoted.
+ */
+const PLATFORM_NOTICES = "https://external-api.tp.entsoe.eu/news/feed";
+
 const SERIES = [
   {
     key: "basePrices",
@@ -27,6 +37,7 @@ const SERIES = [
     source: "Entso-E",
     noun: "Price",
     measured: false,
+    notices: PLATFORM_NOTICES,
   },
   {
     key: "windProduction",
@@ -79,7 +90,11 @@ function describe(series, state, last, notice) {
     lines.push(notice.detail);
   }
 
-  return { title: `${series.label} (${series.source})`, lines };
+  const item = { title: `${series.label} (${series.source})`, lines };
+  if (series.notices) {
+    item.link = { href: series.notices, text: `${series.source} news feed` };
+  }
+  return item;
 }
 
 /**

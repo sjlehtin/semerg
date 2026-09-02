@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and opening on click or tap to show why — the API error the fetch saw, and
   whether the data is missing or being held over from an earlier update.
   `data.json` grows an optional `notices` field to carry those reasons.
+  The Entso-E entry links to the platform's own news feed, which is where an
+  outage is announced and how long it is expected to last.
 
 - Cheapest-time-to-run recommendations for common household loads: dishwasher,
   washing machine, sauna and EV charging at 11 kW. Each shows when to start,

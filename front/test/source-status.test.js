@@ -79,6 +79,22 @@ describe("sourceStatus", () => {
     );
   });
 
+  it("points at the platform's own news feed for an Entso-E fault", () => {
+    const status = sourceStatus(healthy({ basePrices: [] }), NOW);
+
+    expect(status.items[0].link).toEqual({
+      href: "https://external-api.tp.entsoe.eu/news/feed",
+      text: "Entso-E news feed",
+    });
+  });
+
+  it("offers no such link for a source that has none", () => {
+    const status = sourceStatus(healthy({ solarProductionForecast: [] }), NOW);
+
+    expect(status.items[0].title).toBe("Solar forecast (Fingrid)");
+    expect(status.items[0].link).toBeUndefined();
+  });
+
   it("reports the production forecasts", () => {
     const status = sourceStatus(
       healthy({ windProductionForecast: [], solarProductionForecast: [] }),
