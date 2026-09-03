@@ -12,13 +12,40 @@ import { DateTime } from "luxon";
 import { ZONE } from "./tariff.js";
 
 /**
- * How far behind a measured series may fall before it is worth reporting.
- *
- * Fingrid's wind actuals are measurement, not forecast, so they always lag by
- * some minutes. Reporting that as a fault would train the reader to ignore the
- * indicator.
+ * How often `refresh-data.yml` publishes a new `data.json`. Keep in step with
+ * its cron -- every series here is judged against the wall clock, so the whole
+ * page is at least this far behind for a moment before each refresh lands.
  */
-const MEASUREMENT_GRACE_HOURS = 2;
+const REFRESH_CADENCE_HOURS = 1;
+
+/**
+ * GitHub's scheduler is congested at the top of the hour and routinely runs a
+ * scheduled job 5-20 minutes late, which is why the cron fires at :07 in the
+ * first place. A refresh being late is not a source being down.
+ */
+const SCHEDULER_SLACK_HOURS = 0.5;
+
+/**
+ * The floor under every grace period.
+ *
+ * No series is behind merely because the next publish has not happened yet, so
+ * nothing may be reported sooner than the publishing cadence, however a series
+ * below tunes itself.
+ */
+const MINIMUM_GRACE_HOURS = REFRESH_CADENCE_HOURS + SCHEDULER_SLACK_HOURS;
+
+/**
+ * Total age a series may reach before it is worth reporting, floored at
+ * `MINIMUM_GRACE_HOURS`.
+ *
+ * This is the number to tune. It covers the source's own publication lag *on
+ * top of* our cadence, because the reader sees the sum of the two: a reading
+ * taken shortly before a fetch is already an hour old by the time the next
+ * fetch is due.
+ */
+function graceHoursFor(series) {
+  return Math.max(series.graceHours ?? 0, MINIMUM_GRACE_HOURS);
+}
 
 /**
  * Where a source announces its own outages.
@@ -36,7 +63,6 @@ const SERIES = [
     label: "Spot price",
     source: "Entso-E",
     noun: "Price",
-    measured: false,
     notices: PLATFORM_NOTICES,
   },
   {
@@ -44,21 +70,23 @@ const SERIES = [
     label: "Wind production",
     source: "Fingrid",
     noun: "Production",
-    measured: true,
+    // Measurement, not forecast: it never reaches the present. Fingrid's last
+    // reading is around half an hour old when we fetch it, and that fetch is
+    // already a cadence old by the time the next one is due. Three hours
+    // reports two missed refreshes in a row and stays quiet otherwise.
+    graceHours: 3,
   },
   {
     key: "windProductionForecast",
     label: "Wind forecast",
     source: "Fingrid",
     noun: "Forecast",
-    measured: false,
   },
   {
     key: "solarProductionForecast",
     label: "Solar forecast",
     source: "Fingrid",
     noun: "Forecast",
-    measured: false,
   },
 ];
 
@@ -125,9 +153,7 @@ export function sourceStatus(data, now = DateTime.now()) {
   for (const series of SERIES) {
     const points = data?.[series.key] ?? [];
     const last = lastPointOf(points);
-    const deadline = series.measured
-      ? now.minus({ hours: MEASUREMENT_GRACE_HOURS })
-      : now;
+    const deadline = now.minus({ hours: graceHoursFor(series) });
 
     let state = null;
     if (!points.length) {

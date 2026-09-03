@@ -127,24 +127,39 @@ describe("sourceStatus", () => {
   });
 
   it("tolerates wind actuals lagging, and reports them when they stop", () => {
+    // Measurement, not forecast: Fingrid's last reading is already old when we
+    // fetch it, and that fetch is a cadence old before the next one is due.
     expect(
-      sourceStatus(healthy({ windProduction: series(8, -1) }), NOW),
+      sourceStatus(healthy({ windProduction: series(8, -2.5) }), NOW),
     ).toBeNull();
 
-    // Measurement, not a forecast, and the summary says so.
     const status = sourceStatus(
-      healthy({ windProduction: series(8, -3) }),
+      healthy({ windProduction: series(8, -4) }),
       NOW,
     );
     expect(status.summary).toBe("Production data out of date");
     expect(status.items[0].title).toBe("Wind production (Fingrid)");
   });
 
+  it("does not call a series behind while the next refresh is still due", () => {
+    // The publisher runs hourly, so every series spends part of every hour
+    // with nothing newer than the last run. That is the cadence, not a fault.
+    expect(
+      sourceStatus(healthy({ windProductionForecast: series(8, -1) }), NOW),
+    ).toBeNull();
+
+    const status = sourceStatus(
+      healthy({ windProductionForecast: series(8, -2) }),
+      NOW,
+    );
+    expect(status.summary).toBe("Forecast data out of date");
+  });
+
   it("lists every kind of series affected", () => {
     const status = sourceStatus(
       healthy({
         basePrices: [],
-        windProduction: series(8, -3),
+        windProduction: series(8, -4),
         solarProductionForecast: [],
       }),
       NOW,

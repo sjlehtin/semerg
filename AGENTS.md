@@ -209,6 +209,10 @@ Invariants that are easy to break and expensive to debug:
 - **Keep the `data.json` schema backward-compatible.** Assets are `immutable`
   and the page no longer reloads itself, so a long-open tab pairs an old bundle
   with new data. New fields must be optional with a fallback on both sides.
+- **`refresh-data.yml`'s cadence is a number the frontend also holds.**
+  `REFRESH_CADENCE_HOURS` in `front/src/status.js` floors how quickly the page
+  will call a series stale, because nothing is behind merely because the next
+  publish has not happened yet. Change the cron and that constant moves with it.
 - **Never publish an unvalidated `data.json`.** `--output` truncates its target
   file on open, so a failed fetch leaves a partial file behind. The refresh
   workflow validates before uploading.

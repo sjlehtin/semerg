@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- The warning by the chart no longer fires at wind production during normal
+  operation. Fingrid's actuals are measurement and lag by design, and the page
+  reads them from a file that is republished hourly, so the reader sees the sum
+  of both delays. Every series now has a grace period floored at the publishing
+  cadence, and wind actuals tune theirs above it.
+
 ### Added
 
 - A warning by the chart when a source is behind, naming the series affected
